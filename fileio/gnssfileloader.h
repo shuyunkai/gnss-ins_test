@@ -9,13 +9,11 @@
 
 #include "gnss.h"
 
-// 作用：定义 GnssFileLoader 类。
 class GnssFileLoader {
 public:
 	GnssFileLoader() = default;
 
-	// 作用：GnssFileLoader 函数。
-	explicit GnssFileLoader(const std::string& file_path) {
+		explicit GnssFileLoader(const std::string& file_path) {
 		open(file_path);
 	}
 
@@ -23,8 +21,7 @@ public:
 		close();
 	}
 
-	// 作用：open 函数。
-	bool open(const std::string& file_path) {
+		bool open(const std::string& file_path) {
 		close();
 		file_path_ = file_path;
 		line_number_ = 0;
@@ -39,20 +36,17 @@ public:
 		return true;
 	}
 
-	// 作用：close 函数。
-	void close() {
+		void close() {
 		if (stream_.is_open()) {
 			stream_.close();
 		}
 	}
 
-	// 作用：isOpen 函数。
-	bool isOpen() const {
+		bool isOpen() const {
 		return stream_.is_open();
 	}
 
-	// 作用：readNext 函数。
-	bool readNext(GnssData& out_data) {
+		bool readNext(GnssData& out_data) {
 		if (!stream_.is_open()) {
 			last_error_ = "file is not open";
 			return false;
@@ -86,31 +80,24 @@ public:
 		return false;
 	}
 
-	// 作用：lineNumber 函数。
-	std::uint64_t lineNumber() const {
+		std::uint64_t lineNumber() const {
 		return line_number_;
 	}
 
-	// 作用：badLineCount 函数。
-	std::uint64_t badLineCount() const {
+		std::uint64_t badLineCount() const {
 		return bad_line_count_;
 	}
 
-	// 作用：lastError 函数。
-	const std::string& lastError() const {
+		const std::string& lastError() const {
 		return last_error_;
 	}
 
 private:
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：isAsciiSpace 函数。
-	static bool isAsciiSpace(char c) {
+			static bool isAsciiSpace(char c) {
 		return std::isspace(static_cast<unsigned char>(c)) != 0;
 	}
 
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：parseDoubleToken 函数。
-	static bool parseDoubleToken(const char*& p, double& value) {
+			static bool parseDoubleToken(const char*& p, double& value) {
 		while (*p != '\0' && isAsciiSpace(*p)) {
 			++p;
 		}
@@ -131,11 +118,7 @@ private:
 		return true;
 	}
 
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：parseLine 函数。
-	static bool parseLine(const std::string& line, GnssData& out_data) {
+					static bool parseLine(const std::string& line, GnssData& out_data) {
 		const char* p = line.c_str();
 		double first_angle = 0.0;
 		double second_angle = 0.0;
@@ -150,11 +133,9 @@ private:
 			return false;
 		}
 
-		// 作用：此处说明当前字段或步骤的用途。
-		// 1) time, lon, lat, h, ...
+				// 1) time, lon, lat, h, ...
 		// 2) time, lat, lon, h, ...
-		// 作用：此处说明当前字段或步骤的用途。
-		const double a1 = std::fabs(first_angle);
+				const double a1 = std::fabs(first_angle);
 		const double a2 = std::fabs(second_angle);
 		if (a1 <= 180.0 && a2 <= 90.0) {
 			out_data.longitude = first_angle;
@@ -188,8 +169,7 @@ private:
 		out_data.std_ve = 0.0;
 		out_data.std_vd = 0.0;
 
-		// 作用：此处说明当前字段或步骤的用途。
-		const char* p_backup = p;
+				const char* p_backup = p;
 		double vn = 0.0;
 		double ve = 0.0;
 		double vd = 0.0;
@@ -212,8 +192,7 @@ private:
 			out_data.std_ve = sv_e;
 			out_data.std_vd = sv_d;
 		} else {
-			// 作用：此处说明当前字段或步骤的用途。
-			p = p_backup;
+						p = p_backup;
 		}
 
 		while (*p != '\0' && isAsciiSpace(*p)) {

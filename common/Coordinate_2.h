@@ -6,65 +6,51 @@
 
 namespace ins {
 
-// 作用：定义 Vec3 数据结构。
 struct Vec3 {
 	double x = 0.0;
 	double y = 0.0;
 	double z = 0.0;
 };
 
-// 作用：定义 Mat3 数据结构。
 struct Mat3 {
 	double m[3][3] = {{0.0, 0.0, 0.0},
 						 {0.0, 0.0, 0.0},
 						 {0.0, 0.0, 0.0}};
 };
 
-// 作用：定义 Quaternion 数据结构。
 struct Quaternion {
-	// 作用：此处说明当前字段或步骤的用途。
-	double w = 1.0;
+		double w = 1.0;
 	double x = 0.0;
 	double y = 0.0;
 	double z = 0.0;
 };
 
-// 作用：定义 Euler 数据结构。
 struct Euler {
-	// 作用：此处说明当前字段或步骤的用途。
-	double roll = 0.0;
+		double roll = 0.0;
 	double pitch = 0.0;
 	double yaw = 0.0;
 };
 
-// 作用：定义 Blh 数据结构。
 struct Blh {
-	// 作用：此处说明当前字段或步骤的用途。
-	double lat = 0.0;
+		double lat = 0.0;
 	double lon = 0.0;
 	double h = 0.0;
 };
 
-// 作用：定义 Wgs84 数据结构。
 struct Wgs84 {
 	double a = 6378137.0;
 	double f = 1.0 / 298.257223563;
 	double omega_ie = 7.292115e-5;
 };
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：deg2rad 函数。
 inline double deg2rad(double deg) {
 	return deg * 3.14159265358979323846 / 180.0;
 }
 
-// 作用：rad2deg 函数。
 inline double rad2deg(double rad) {
 	return rad * 180.0 / 3.14159265358979323846;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：identity3 函数。
 inline Mat3 identity3() {
 	Mat3 r;
 	r.m[0][0] = 1.0;
@@ -73,8 +59,6 @@ inline Mat3 identity3() {
 	return r;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：transpose 函数。
 inline Mat3 transpose(const Mat3& a) {
 	Mat3 r;
 	for (int i = 0; i < 3; ++i) {
@@ -85,8 +69,6 @@ inline Mat3 transpose(const Mat3& a) {
 	return r;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：matVec 函数。
 inline Vec3 matVec(const Mat3& a, const Vec3& v) {
 	Vec3 r;
 	r.x = a.m[0][0] * v.x + a.m[0][1] * v.y + a.m[0][2] * v.z;
@@ -95,8 +77,6 @@ inline Vec3 matVec(const Mat3& a, const Vec3& v) {
 	return r;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：matMul 函数。
 inline Mat3 matMul(const Mat3& a, const Mat3& b) {
 	Mat3 r;
 	for (int i = 0; i < 3; ++i) {
@@ -110,14 +90,10 @@ inline Mat3 matMul(const Mat3& a, const Mat3& b) {
 	return r;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：vecNorm 函数。
 inline double vecNorm(const Vec3& v) {
 	return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：normalizeQuaternion 函数。
 inline Quaternion normalizeQuaternion(const Quaternion& q) {
 	const double n = std::sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
 	if (n <= 0.0) {
@@ -131,8 +107,6 @@ inline Quaternion normalizeQuaternion(const Quaternion& q) {
 	return r;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：euler2dcm 函数。
 inline Mat3 euler2dcm(const Euler& e) {
 	const double cr = std::cos(e.roll);
 	const double sr = std::sin(e.roll);
@@ -141,8 +115,7 @@ inline Mat3 euler2dcm(const Euler& e) {
 	const double cy = std::cos(e.yaw);
 	const double sy = std::sin(e.yaw);
 
-	// 作用：此处说明当前字段或步骤的用途。
-	Mat3 c;
+		Mat3 c;
 	c.m[0][0] = cy * cp;
 	c.m[0][1] = cy * sp * sr - sy * cr;
 	c.m[0][2] = cy * sp * cr + sy * sr;
@@ -155,8 +128,6 @@ inline Mat3 euler2dcm(const Euler& e) {
 	return c;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：dcm2euler 函数。
 inline Euler dcm2euler(const Mat3& c) {
 	Euler e;
 	e.pitch = std::asin(std::clamp(-c.m[2][0], -1.0, 1.0));
@@ -165,8 +136,6 @@ inline Euler dcm2euler(const Mat3& c) {
 	return e;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：euler2quat 函数。
 inline Quaternion euler2quat(const Euler& e) {
 	const double cr2 = std::cos(0.5 * e.roll);
 	const double sr2 = std::sin(0.5 * e.roll);
@@ -180,12 +149,9 @@ inline Quaternion euler2quat(const Euler& e) {
 	q.x = cy2 * cp2 * sr2 - sy2 * sp2 * cr2;
 	q.y = cy2 * sp2 * cr2 + sy2 * cp2 * sr2;
 	q.z = sy2 * cp2 * cr2 - cy2 * sp2 * sr2;
-	// 作用：normalizeQuaternion 函数。
-	return normalizeQuaternion(q);
+		return normalizeQuaternion(q);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：quat2dcm 函数。
 inline Mat3 quat2dcm(const Quaternion& q_in) {
 	const Quaternion q = normalizeQuaternion(q_in);
 
@@ -209,8 +175,6 @@ inline Mat3 quat2dcm(const Quaternion& q_in) {
 	return c;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：dcm2quat 函数。
 inline Quaternion dcm2quat(const Mat3& c) {
 	Quaternion q;
 	const double tr = c.m[0][0] + c.m[1][1] + c.m[2][2];
@@ -239,19 +203,13 @@ inline Quaternion dcm2quat(const Mat3& c) {
 		q.y = (c.m[1][2] + c.m[2][1]) / s;
 		q.z = 0.25 * s;
 	}
-	// 作用：normalizeQuaternion 函数。
-	return normalizeQuaternion(q);
+		return normalizeQuaternion(q);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：quat2euler 函数。
 inline Euler quat2euler(const Quaternion& q) {
-	// 作用：dcm2euler 函数。
-	return dcm2euler(quat2dcm(q));
+		return dcm2euler(quat2dcm(q));
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：rotvec2quat 函数。
 inline Quaternion rotvec2quat(const Vec3& rv) {
 	const double angle = vecNorm(rv);
 	if (angle < 1e-12) {
@@ -260,8 +218,7 @@ inline Quaternion rotvec2quat(const Vec3& rv) {
 		q.x = 0.5 * rv.x;
 		q.y = 0.5 * rv.y;
 		q.z = 0.5 * rv.z;
-		// 作用：normalizeQuaternion 函数。
-		return normalizeQuaternion(q);
+				return normalizeQuaternion(q);
 	}
 
 	const double half = 0.5 * angle;
@@ -271,12 +228,9 @@ inline Quaternion rotvec2quat(const Vec3& rv) {
 	q.x = rv.x * s;
 	q.y = rv.y * s;
 	q.z = rv.z * s;
-	// 作用：normalizeQuaternion 函数。
-	return normalizeQuaternion(q);
+		return normalizeQuaternion(q);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：quat2rotvec 函数。
 inline Vec3 quat2rotvec(const Quaternion& q_in) {
 	const Quaternion q = normalizeQuaternion(q_in);
 	const double sin_half = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z);
@@ -290,22 +244,14 @@ inline Vec3 quat2rotvec(const Quaternion& q_in) {
 	return Vec3{q.x * scale, q.y * scale, q.z * scale};
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：rotvec2dcm 函数。
 inline Mat3 rotvec2dcm(const Vec3& rv) {
-	// 作用：quat2dcm 函数。
-	return quat2dcm(rotvec2quat(rv));
+		return quat2dcm(rotvec2quat(rv));
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：dcm2rotvec 函数。
 inline Vec3 dcm2rotvec(const Mat3& c) {
-	// 作用：quat2rotvec 函数。
-	return quat2rotvec(dcm2quat(c));
+		return quat2rotvec(dcm2quat(c));
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：cne 函数。
 inline Mat3 cne(const Blh& blh) {
 	const double slat = std::sin(blh.lat);
 	const double clat = std::cos(blh.lat);
@@ -327,15 +273,10 @@ inline Mat3 cne(const Blh& blh) {
 	return c;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：qne 函数。
 inline Quaternion qne(const Blh& blh) {
-	// 作用：dcm2quat 函数。
-	return dcm2quat(cne(blh));
+		return dcm2quat(cne(blh));
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：blh 函数。
 inline Blh blh(const Quaternion& q_ne) {
 	const Mat3 c = quat2dcm(q_ne);
 	Blh out;
@@ -345,8 +286,6 @@ inline Blh blh(const Quaternion& q_ne) {
 	return out;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：blh2ecef 函数。
 inline Vec3 blh2ecef(const Blh& p, const Wgs84& wgs84 = Wgs84()) {
 	const double e2 = 2.0 * wgs84.f - wgs84.f * wgs84.f;
 	const double slat = std::sin(p.lat);
@@ -363,8 +302,6 @@ inline Vec3 blh2ecef(const Blh& p, const Wgs84& wgs84 = Wgs84()) {
 	return e;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：ecef2blh 函数。
 inline Blh ecef2blh(const Vec3& ecef, const Wgs84& wgs84 = Wgs84()) {
 	const double e2 = 2.0 * wgs84.f - wgs84.f * wgs84.f;
 	const double b = wgs84.a * (1.0 - wgs84.f);
@@ -395,22 +332,14 @@ inline Blh ecef2blh(const Vec3& ecef, const Wgs84& wgs84 = Wgs84()) {
 	return out;
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：DRi 函数。
 inline Vec3 DRi(const Vec3& dr_n, const Blh& ref_blh) {
-	// 作用：matVec 函数。
-	return matVec(cne(ref_blh), dr_n);
+		return matVec(cne(ref_blh), dr_n);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：DR 函数。
 inline Vec3 DR(const Vec3& dr_e, const Blh& ref_blh) {
-	// 作用：matVec 函数。
-	return matVec(transpose(cne(ref_blh)), dr_e);
+		return matVec(transpose(cne(ref_blh)), dr_e);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：local2global 函数。
 inline Blh local2global(const Vec3& local_n,
 						 const Blh& origin,
 						 const Wgs84& wgs84 = Wgs84()) {
@@ -420,12 +349,9 @@ inline Blh local2global(const Vec3& local_n,
 	e.x = e0.x + de.x;
 	e.y = e0.y + de.y;
 	e.z = e0.z + de.z;
-	// 作用：ecef2blh 函数。
-	return ecef2blh(e, wgs84);
+		return ecef2blh(e, wgs84);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：global2local 函数。
 inline Vec3 global2local(const Blh& global,
 						 const Blh& origin,
 						 const Wgs84& wgs84 = Wgs84()) {
@@ -435,26 +361,18 @@ inline Vec3 global2local(const Blh& global,
 	de.x = eg.x - e0.x;
 	de.y = eg.y - e0.y;
 	de.z = eg.z - e0.z;
-	// 作用：DR 函数。
-	return DR(de, origin);
+		return DR(de, origin);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：iewe 函数。
 inline Vec3 iewe(const Wgs84& wgs84 = Wgs84()) {
 	return Vec3{0.0, 0.0, wgs84.omega_ie};
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：iewn 函数。
 inline Vec3 iewn(const Blh& blh_pos, const Wgs84& wgs84 = Wgs84()) {
 	const Vec3 omega_ie_e = iewe(wgs84);
-	// 作用：matVec 函数。
-	return matVec(transpose(cne(blh_pos)), omega_ie_e);
+		return matVec(transpose(cne(blh_pos)), omega_ie_e);
 }
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：enwn 函数。
 inline Vec3 enwn(const Blh& blh_pos,
 				 const Vec3& vel_n,
 				 const Wgs84& wgs84 = Wgs84()) {

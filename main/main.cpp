@@ -14,29 +14,21 @@
 #include "fusion_workflow.h"
 #include "is_update.h"
 namespace ins {
-// 作用：degPerHourToRadPerSec 函数。
 inline double degPerHourToRadPerSec(double deg_per_hour) {
-	// 作用：deg2rad 函数。
-	return deg2rad(deg_per_hour) / 3600.0;
+		return deg2rad(deg_per_hour) / 3600.0;
 }
-// 作用：degPerSqrtHourToRadPerSqrtSec 函数。
 inline double degPerSqrtHourToRadPerSqrtSec(double deg_per_sqrt_hour) {
-	// 作用：deg2rad 函数。
-	return deg2rad(deg_per_sqrt_hour) / std::sqrt(3600.0);
+		return deg2rad(deg_per_sqrt_hour) / std::sqrt(3600.0);
 }
-// 作用：mGalToMps2 函数。
 inline double mGalToMps2(double mgal) {
 	return mgal * 1e-5;
 }
-// 作用：mpsPerSqrtHourToMps2PerSqrtHz 函数。
 inline double mpsPerSqrtHourToMps2PerSqrtHz(double mps_per_sqrt_hour) {
 	return mps_per_sqrt_hour / std::sqrt(3600.0);
 }
-// 作用：ppmToRatio 函数。
 inline double ppmToRatio(double ppm) {
 	return ppm * 1e-6;
 }
-// 作用：normalizeGnssAngleToRadIfNeeded 函数。
 inline void normalizeGnssAngleToRadIfNeeded(GnssData& gnss) {
 	const double kRadMax = 3.2;
 	if (std::fabs(gnss.latitude) > kRadMax || std::fabs(gnss.longitude) > kRadMax) {
@@ -44,7 +36,6 @@ inline void normalizeGnssAngleToRadIfNeeded(GnssData& gnss) {
 		gnss.longitude = deg2rad(gnss.longitude);
 	}
 }
-// 作用：定义 InitialParameterConfig 数据结构。
 struct InitialParameterConfig {
 	bool use_first_gnss_position = false;
 	std::array<double, 3> init_blh = {30.4604325443,114.4725046685,23.000};
@@ -74,7 +65,6 @@ struct InitialParameterConfig {
 	std::array<double, 3> gyro_scale_process_std = {200, 200, 200};
 	std::array<double, 3> accel_scale_process_std = {1000, 1000, 1000};
 };
-// 作用：定义 MainProgramConfig 数据结构。
 struct MainProgramConfig {
 	std::string imu_file_path = "data/ICM20602.txt";
 	std::string gnss_file_path = "data/GNSS_RTK.txt";
@@ -91,23 +81,18 @@ struct MainProgramConfig {
 	std::size_t progress_update_step = 5000;
 	InitialParameterConfig init;
 };
-// 作用：fileExists 函数。
 inline bool fileExists(const std::string& file_path) {
-	// 作用：ifs 函数。
-	std::ifstream ifs(file_path, std::ios::binary);
+		std::ifstream ifs(file_path, std::ios::binary);
 	return ifs.good();
 }
-// 作用：resolveImuFilePath 函数。
 inline std::string resolveImuFilePath(const MainProgramConfig& cfg) {
 	if (!cfg.imu_file_path.empty() && fileExists(cfg.imu_file_path)) {
 		return cfg.imu_file_path;
 	}
-	throw std::runtime_error("没锟斤拷imu锟侥硷拷");
+	throw std::runtime_error("没imu锟侥硷拷");
 }
-// 作用：countTextLinesFast 函数。
 inline std::size_t countTextLinesFast(const std::string& file_path) {
-	// 作用：ifs 函数。
-	std::ifstream ifs(file_path);
+		std::ifstream ifs(file_path);
 	if (!ifs.is_open()) {
 		return 0;
 	}
@@ -120,15 +105,13 @@ inline std::size_t countTextLinesFast(const std::string& file_path) {
 	}
 	return lines;
 }
-// 作用：estimateImuRecordCount 函数。
 inline std::size_t estimateImuRecordCount(const std::string& imu_file_path) {
 	ImuFileLoader loader;
 	if (!loader.open(imu_file_path)) {
 		return 0;
 	}
 	if (loader.isBinary()) {
-		// 作用：ifs 函数。
-		std::ifstream ifs(imu_file_path, std::ios::binary | std::ios::ate);
+				std::ifstream ifs(imu_file_path, std::ios::binary | std::ios::ate);
 		if (!ifs.is_open()) {
 			return 0;
 		}
@@ -138,18 +121,14 @@ inline std::size_t estimateImuRecordCount(const std::string& imu_file_path) {
 		}
 		return static_cast<std::size_t>(size / static_cast<std::streamoff>(sizeof(double) * 7));
 	}
-	// 作用：countTextLinesFast 函数。
-	return countTextLinesFast(imu_file_path);
+		return countTextLinesFast(imu_file_path);
 }
-// 作用：calcMarkovPhi 函数。
 inline double calcMarkovPhi(double dt, double tau) {
 	const double tau_safe = (tau > 1e-6) ? tau : 1e-6;
 	return std::exp(-dt / tau_safe);
 }
-// 作用：skewMatrix 函数。
 inline Matrix skewMatrix(const Vec3& v) {
-	// 作用：s 函数。
-	Matrix s(3, 3, 0.0);
+		Matrix s(3, 3, 0.0);
 	s(0, 1) = -v.z;
 	s(0, 2) = v.y;
 	s(1, 0) = v.z;
@@ -158,10 +137,8 @@ inline Matrix skewMatrix(const Vec3& v) {
 	s(2, 1) = v.x;
 	return s;
 }
-// 作用：mat3ToMatrix 函数。
 inline Matrix mat3ToMatrix(const Mat3& m) {
-	// 作用：out 函数。
-	Matrix out(3, 3, 0.0);
+		Matrix out(3, 3, 0.0);
 	for (std::size_t r = 0; r < 3; ++r) {
 		for (std::size_t c = 0; c < 3; ++c) {
 			out(r, c) = m.m[r][c];
@@ -169,16 +146,13 @@ inline Matrix mat3ToMatrix(const Mat3& m) {
 	}
 	return out;
 }
-// 作用：diagFromVec3 函数。
 inline Matrix diagFromVec3(const Vec3& v) {
-	// 作用：d 函数。
-	Matrix d(3, 3, 0.0);
+		Matrix d(3, 3, 0.0);
 	d(0, 0) = v.x;
 	d(1, 1) = v.y;
 	d(2, 2) = v.z;
 	return d;
 }
-// 作用：addBlock3x3 函数。
 inline void addBlock3x3(Matrix& dst,
 						std::size_t row0,
 						std::size_t col0,
@@ -190,7 +164,6 @@ inline void addBlock3x3(Matrix& dst,
 		}
 	}
 }
-// 作用：buildAlignedTransitionF 函数。
 inline Matrix buildAlignedTransitionF(double dt,
 								const NavigationStatusData& nav_state,
 								const ImuMeasureData& imu_measure,
@@ -235,8 +208,7 @@ inline Matrix buildAlignedTransitionF(double dt,
 	const Vec3 omega_en_n = enwn(blh, vel_n);
 	const Vec3 omega_in_n = addVec3(omega_ie_n, omega_en_n);
 	const double omega_e = earth.omega_ie;
-	// 作用：fc 函数。
-	Matrix fc(ErrorStateIndex21::kDim, ErrorStateIndex21::kDim, 0.0);
+		Matrix fc(ErrorStateIndex21::kDim, ErrorStateIndex21::kDim, 0.0);
 	// F_rr
 	fc(ErrorStateIndex21::kPos + 0, ErrorStateIndex21::kPos + 0) = -v_d / rm_h;
 	fc(ErrorStateIndex21::kPos + 0, ErrorStateIndex21::kPos + 2) = v_n / rm_h;
@@ -287,8 +259,7 @@ inline Matrix buildAlignedTransitionF(double dt,
 				 ErrorStateIndex21::kAccelBias, c_nb, 1.0);
 	addBlock3x3(fc,
 				 ErrorStateIndex21::kVel,
-				 // 作用：mul 函数。
-				 ErrorStateIndex21::kAccelScale, mul(c_nb, diagFromVec3(f_b)), 1.0);
+				 				 ErrorStateIndex21::kAccelScale, mul(c_nb, diagFromVec3(f_b)), 1.0);
 	fc(ErrorStateIndex21::kAtt + 0, ErrorStateIndex21::kPos + 0) = -omega_e * sin_lat / rm_h;
 	fc(ErrorStateIndex21::kAtt + 0, ErrorStateIndex21::kPos + 2) = v_e / (rn_h * rn_h);
 	fc(ErrorStateIndex21::kAtt + 1, ErrorStateIndex21::kPos + 2) = -v_n / (rm_h * rm_h);
@@ -339,7 +310,6 @@ inline Matrix buildAlignedTransitionF(double dt,
 	}
 	return f;
 }
-// 作用：buildAlignedProcessNoiseQ 函数。
 inline Matrix buildAlignedProcessNoiseQ(double dt,
 												const Matrix& f,
 												const ImuMeasureData& imu_measure,
@@ -356,8 +326,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 	const double tas_safe = (t_as > 1e-6) ? t_as : 1e-6;
 
 	// [wv, wphi, wgb, wab, wgs, was]
-	// 作用：q_c 函数。
-	Matrix q_c(18, 18, 0.0);
+		Matrix q_c(18, 18, 0.0);
 	for (std::size_t i = 0; i < 3; ++i) {
 		const double vrw = mpsPerSqrtHourToMps2PerSqrtHz(
 				std::fabs(init_cfg.init_imu_error.accel_random_walk[i]));
@@ -402,8 +371,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 	addBlock3x3(g_k, ErrorStateIndex21::kAccelBias, 9, Matrix::identity(3), 1.0);
 	addBlock3x3(g_k, ErrorStateIndex21::kGyroScale, 12, Matrix::identity(3), 1.0);
 	addBlock3x3(g_k, ErrorStateIndex21::kAccelScale, 15, Matrix::identity(3), 1.0);
-	// 作用：q_d 函数。
-	Matrix q_d(ErrorStateIndex21::kDim, ErrorStateIndex21::kDim, 0.0);
+		Matrix q_d(ErrorStateIndex21::kDim, ErrorStateIndex21::kDim, 0.0);
 	
 	// G(t_{k-1}) * q(t_{k-1}) * G^T(t_{k-1})
 	Matrix g_q_gt_km1 = mul(mul(g_km1, q_c), transpose(g_km1));
@@ -421,10 +389,8 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 	}
 	return q_d;
 }
-// 作用：buildInitialCovarianceP0 函数。
 inline Matrix buildInitialCovarianceP0(const InitialParameterConfig& init_cfg) {
-	// 作用：p0 函数。
-	Matrix p0(ErrorStateIndex21::kDim, ErrorStateIndex21::kDim, 0.0);
+		Matrix p0(ErrorStateIndex21::kDim, ErrorStateIndex21::kDim, 0.0);
 	for (std::size_t i = 0; i < 3; ++i) {
 		p0(ErrorStateIndex21::kPos + i, ErrorStateIndex21::kPos + i) =
 				init_cfg.pos_std[i] * init_cfg.pos_std[i];
@@ -447,7 +413,6 @@ inline Matrix buildInitialCovarianceP0(const InitialParameterConfig& init_cfg) {
 	}
 	return p0;
 }
-// 作用：buildInitialNavigationStatus 函数。
 inline NavigationStatusData buildInitialNavigationStatus(
 		const InitialParameterConfig& init_cfg,
 		bool has_first_gnss,
@@ -478,7 +443,6 @@ inline NavigationStatusData buildInitialNavigationStatus(
 	nav_init.imuerror_.accel_scale = init_cfg.init_accel_scale;
 	return nav_init;
 }
-// 作用：extractStd 函数。
 inline std::array<double, 3> extractStd(const Matrix& p, std::size_t start_idx) {
 	std::array<double, 3> out{0.0, 0.0, 0.0};
 	for (std::size_t i = 0; i < 3; ++i) {
@@ -487,7 +451,6 @@ inline std::array<double, 3> extractStd(const Matrix& p, std::size_t start_idx) 
 	}
 	return out;
 }
-// 作用：printProgressBar 函数。
 inline void printProgressBar(std::size_t processed, std::size_t total, std::size_t width) {
 	if (width == 0) {
 		width = 40;
@@ -495,7 +458,7 @@ inline void printProgressBar(std::size_t processed, std::size_t total, std::size
 	if (total == 0) {
 		const char spinner[4] = {'|', '/', '-', '\\'};
 		const char c = spinner[processed % 4];
-		std::cout << "\r[" << c << "] 锟窖达拷锟斤拷IMU锟斤拷锟斤拷: " << processed << std::flush;
+		std::cout << "\r[" << c << "] 锟窖达拷IMU: " << processed << std::flush;
 		return;
 	}
 	if (processed > total) {
@@ -510,36 +473,35 @@ inline void printProgressBar(std::size_t processed, std::size_t total, std::size
 	std::cout << "] " << std::fixed << std::setprecision(1) << (ratio * 100.0)
 			  << "% (" << processed << "/" << total << ")" << std::flush;
 }
-// 作用：RunGnssInsMain 函数。
 inline int RunGnssInsMain(const MainProgramConfig& cfg = MainProgramConfig()) {
 	const std::string imu_file_path = resolveImuFilePath(cfg);
 	ImuFileLoader imu_loader;
 	if (!imu_loader.open(imu_file_path)) {
-		throw std::runtime_error("没锟斤拷imu锟侥硷拷");
+		throw std::runtime_error("没imu锟侥硷拷");
 	}
 	GnssFileLoader gnss_loader;
 	const bool gnss_open_ok = gnss_loader.open(cfg.gnss_file_path);
 	FileSaver saver;
 	if (!saver.openDefaultFiles(cfg.output_dir)) {
-		throw std::runtime_error("锟津开斤拷锟斤拷锟斤拷锟侥硷拷失锟斤拷");
+		throw std::runtime_error("锟津开斤拷锟侥硷拷失");
 	}
 	ImuData imu_pre;
 	ImuData imu_cur;
 	if (!imu_loader.readNext(imu_pre)) {
-		throw std::runtime_error("没锟斤拷imu锟侥硷拷");
+		throw std::runtime_error("没imu锟侥硷拷");
 	}
 	if (!imu_loader.readNext(imu_cur)) {
-		throw std::runtime_error("没锟斤拷imu锟侥硷拷");
+		throw std::runtime_error("没imu锟侥硷拷");
 	}
 	const double imu_file_t0 = imu_pre.time;
 	const double start_time = (cfg.process_start_s < 0.0) ? imu_file_t0 : cfg.process_start_s;
 	if (cfg.process_end_s >= 0.0 && cfg.process_end_s < start_time) {
-		throw std::runtime_error("时锟戒窗锟斤拷锟斤拷锟斤拷?? end锟斤拷锟斤拷锟斤拷诘锟斤拷锟絪tart锟斤拷锟斤拷锟斤拷锟斤拷??1");
+		throw std::runtime_error("时锟戒窗?? end诘锟絪tart??1");
 	}
 	while (imu_cur.time < start_time) {
 		imu_pre = imu_cur;
 		if (!imu_loader.readNext(imu_cur)) {
-			throw std::runtime_error("时锟戒窗锟斤拷愠拷锟絀MU锟侥硷拷锟斤拷围");
+			throw std::runtime_error("时锟戒窗愠拷锟絀MU锟侥硷拷围");
 		}
 	}
 	GnssData gnss_next;
@@ -555,8 +517,7 @@ inline int RunGnssInsMain(const MainProgramConfig& cfg = MainProgramConfig()) {
 			has_next_gnss,
 			gnss_next);
 	GnssInsFusionWorkflow workflow;
-	// 作用：x0 函数。
-	Matrix x0(ErrorStateIndex21::kDim, 1, 0.0);
+		Matrix x0(ErrorStateIndex21::kDim, 1, 0.0);
 	const Matrix p0 = buildInitialCovarianceP0(cfg.init);
 	workflow.initialize(nav_init, x0, p0);
 	const std::size_t total_records = estimateImuRecordCount(imu_file_path);
@@ -685,13 +646,13 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 		const std::array<double, 3> gs_std = extractStd(p, ErrorStateIndex21::kGyroScale);
 		const std::array<double, 3> as_std = extractStd(p, ErrorStateIndex21::kAccelScale);
 		if (!saver.writeTruthLine(imu_cur.time, nav.pvacur_)) {
-			throw std::runtime_error("写锟斤拷Navresult失锟斤拷");
+			throw std::runtime_error("写Navresult失");
 		}
 		if (!saver.writeImuErrorLine(imu_cur.time, nav.imuerror_)) {
-			throw std::runtime_error("写锟斤拷Imu_Error失锟斤拷");
+			throw std::runtime_error("写Imu_Error失");
 		}
 		if (!saver.writeStateStdLine(imu_cur.time, pos_std, vel_std, att_std, gb_std, ab_std, gs_std, as_std)) {
-			throw std::runtime_error("写锟斤拷STD_result失锟斤拷");
+			throw std::runtime_error("写STD_result失");
 		}
 		
 		// 检查协方差对角线元素是否都为正
@@ -720,16 +681,15 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 	printProgressBar((total_records > 0) ? total_records : processed,
 					 total_records,
 					 cfg.progress_bar_width);
-	std::cout << "\n锟斤拷系锟斤拷锟斤拷锟斤拷锟斤拷锟缴ｏ拷锟斤拷锟斤拷驯锟斤拷锟? "
+	std::cout << "\n系锟缴ｏ拷驯锟? "
 			  << FileSaver::kNavResultFileName << ", "
 			  << FileSaver::kImuErrorFileName << ", "
 			  << FileSaver::kStdResultFileName << std::endl;
 	if (!gnss_open_ok) {
-		std::cout << "锟斤拷示" << std::endl;
+		std::cout << "示" << std::endl;
 	}
 	return 0;
 }
-// 作用：printMainUsage 函数。
 inline void printMainUsage(const char* exe_name) {
 	std::cout << "锟矫凤拷: " << exe_name
 			  << " [--imu <imu_file>] [--gnss <gnss_file>] [--out <output_dir>]"
@@ -739,7 +699,6 @@ inline void printMainUsage(const char* exe_name) {
 			  << " [--start <imu_time>] [--end <imu_time|-1>] [--help]"
 			  << std::endl;
 }
-// 作用：ParseMainConfigFromArgs 函数。
 inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 	MainProgramConfig cfg;
 	for (int i = 1; i < argc; ++i) {
@@ -750,7 +709,7 @@ inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 		}
 		auto needValue = [&](const char* opt_name) -> std::string {
 			if (i + 1 >= argc) {
-				throw std::runtime_error(std::string("锟斤拷锟斤拷缺锟斤拷取?? ") + opt_name);
+				throw std::runtime_error(std::string("缺取?? ") + opt_name);
 			}
 			++i;
 			return std::string(argv[i]);
@@ -789,7 +748,6 @@ inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 }
 }  // namespace ins
 
-// 作用：main 函数。
 int main(int argc, char** argv) {
 	try {
 		const ins::MainProgramConfig cfg = ins::ParseMainConfigFromArgs(argc, argv);

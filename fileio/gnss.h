@@ -2,31 +2,26 @@
 
 #include <cmath>
 
-// 作用：定义 GnssData 数据结构。
 struct GnssData {
 	double time = 0.0;
 	double longitude = 0.0;
 	double latitude = 0.0;
 	double altitude = 0.0;
 
-	// 作用：此处说明当前字段或步骤的用途。
-	double std_x = 0.0;
+		double std_x = 0.0;
 	double std_y = 0.0;
 	double std_z = 0.0;
 
-	// 作用：此处说明当前字段或步骤的用途。
-	bool has_velocity = false;
+		bool has_velocity = false;
 	double vel_n = 0.0;
 	double vel_e = 0.0;
 	double vel_d = 0.0;
 
-	// 作用：此处说明当前字段或步骤的用途。
-	double std_vn = 0.0;
+		double std_vn = 0.0;
 	double std_ve = 0.0;
 	double std_vd = 0.0;
 
-	// 作用：isFinite 函数。
-	bool isFinite() const {
+		bool isFinite() const {
 		return std::isfinite(time) &&
 			   std::isfinite(longitude) &&
 			   std::isfinite(latitude) &&
@@ -43,8 +38,6 @@ struct GnssData {
 	}
 };
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：定义 GnssMeasureData 数据结构。
 struct GnssMeasureData {
 	GnssData gnssdata_;
 };

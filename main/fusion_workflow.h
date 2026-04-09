@@ -7,12 +7,10 @@
 #include "ins_main.h"
 #include "kalman.h"
 namespace ins {
-// 作用：定义 GnssInsFusionWorkflow 类。
 class GnssInsFusionWorkflow {
 public:
     GnssInsFusionWorkflow() : kf_(ErrorStateIndex21::kDim) {}
-    // 作用：initialize 函数。
-    void initialize(const NavigationStatusData& nav_init,
+        void initialize(const NavigationStatusData& nav_init,
                     const Matrix& x0,
                     const Matrix& p0) {
         if (x0.rows() != ErrorStateIndex21::kDim || x0.cols() != 1) {
@@ -26,8 +24,7 @@ public:
         kf_.setCovariance(p0);
         initialized_ = true;
     }
-    // 作用：processStep 函数。
-    // 注意: 本函数只执行EKF predict/update,不负责INS机械编排
+        // 注意: 本函数只执行EKF predict/update,不负责INS机械编排
     // INS传播应由调用方在调用本函数前完成
     void processStep(const ImuMeasureData& imu_measure,
                      const Matrix& f,
@@ -56,8 +53,7 @@ public:
         
         nav_state_.pvapre_ = nav_state_.pvacur_;
     }
-    // 作用：processImuOnly 函数。
-    void processImuOnly(const ImuMeasureData& imu_measure,
+        void processImuOnly(const ImuMeasureData& imu_measure,
                         const Matrix& f,
                         const Matrix& q) {
         ensureInitialized();
@@ -65,8 +61,7 @@ public:
         kf_.predict(f, q);
         nav_state_.pvapre_ = nav_state_.pvacur_;
     }
-    // 作用：processGnssUpdate 函数。
-    void processGnssUpdate(const GnssData& gnss_data,
+        void processGnssUpdate(const GnssData& gnss_data,
                            const std::array<double, 3>& antenna_lever_arm_b = {0.0, 0.0, 0.0}) {
         ensureInitialized();
         const Matrix residual_z = buildPositionResidualInsMinusGnss(
@@ -82,21 +77,18 @@ public:
         
         nav_state_.pvapre_ = nav_state_.pvacur_;
     }
-    // 作用：navState 函数。
-    const NavigationStatusData& navState() const {
+        const NavigationStatusData& navState() const {
         return nav_state_;
     }
     // 作用：setNavState 函数（用于更新传播后的导航状态）
     void setNavState(const NavigationStatusData& new_state) {
         nav_state_ = new_state;
     }
-    // 作用：kalman 函数。
-    const StandardKalmanFilter& kalman() const {
+        const StandardKalmanFilter& kalman() const {
         return kf_;
     }
 private:
-    // 作用：estimateAntennaBlhFromIns 函数。
-    static Blh estimateAntennaBlhFromIns(const PvaData& ins_pva,
+        static Blh estimateAntennaBlhFromIns(const PvaData& ins_pva,
                                          const std::array<double, 3>& antenna_lever_arm_b) {
         const Blh imu_blh{ins_pva.blh[0], ins_pva.blh[1], ins_pva.blh[2]};
         const Euler imu_euler{ins_pva.euler[0], ins_pva.euler[1], ins_pva.euler[2]};
@@ -104,33 +96,28 @@ private:
         const Mat3 c_nb = quat2dcm(q_nb);
         const Vec3 lever_b{antenna_lever_arm_b[0], antenna_lever_arm_b[1], antenna_lever_arm_b[2]};
         const Vec3 lever_n = matVec(c_nb, lever_b);
-        // 作用：local2global 函数。
-        return local2global(lever_n, imu_blh);
+                return local2global(lever_n, imu_blh);
     }
-    // 作用：buildPositionResidualInsMinusGnss 函数。
-    static Matrix buildPositionResidualInsMinusGnss(const PvaData& ins_pva,
+        static Matrix buildPositionResidualInsMinusGnss(const PvaData& ins_pva,
                                                     const GnssData& gnss,
                                                     const std::array<double, 3>& antenna_lever_arm_b) {
         const Blh ins_antenna_blh = estimateAntennaBlhFromIns(ins_pva, antenna_lever_arm_b);
         const Blh gnss_blh{gnss.latitude, gnss.longitude, gnss.altitude};
         const Vec3 dr_gnss_minus_ins_n = global2local(gnss_blh, ins_antenna_blh);
-        // 作用：z 函数。
-        Matrix z(3, 1, 0.0);
+                Matrix z(3, 1, 0.0);
         z(0, 0) = -dr_gnss_minus_ins_n.x;
         z(1, 0) = -dr_gnss_minus_ins_n.y;
         z(2, 0) = -dr_gnss_minus_ins_n.z;
         return z;
     }
-    // 作用：estimateOmegaIbBFromImu 函数。
-    static Vec3 estimateOmegaIbBFromImu(const ImuMeasureData& imu_measure,
+        static Vec3 estimateOmegaIbBFromImu(const ImuMeasureData& imu_measure,
                                         const NavigationStatusData& nav_state) {
         const double dt = imu_measure.imucur_.time - imu_measure.imupre_.time;
         const double dt_safe = (dt > 1e-6) ? dt : 1e-6;
         const ImuData imu_corr = compensateSingleImuByError(imu_measure.imucur_, nav_state.imuerror_, dt_safe);
         return Vec3{imu_corr.dtheta_x / dt_safe, imu_corr.dtheta_y / dt_safe, imu_corr.dtheta_z / dt_safe};
     }
-    // 作用：ensureInitialized 函数。
-    void ensureInitialized() const {
+        void ensureInitialized() const {
         if (!initialized_) {
             throw std::runtime_error("GnssInsFusionWorkflow未初始化");
         }

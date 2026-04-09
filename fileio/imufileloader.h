@@ -10,7 +10,6 @@
 
 #include "imu.h"
 
-// 作用：定义 ImuFileLoader 类。
 class ImuFileLoader {
 public:
 	enum class FileFormat {
@@ -21,8 +20,7 @@ public:
 
 	ImuFileLoader() = default;
 
-	// 作用：ImuFileLoader 函数。
-	explicit ImuFileLoader(const std::string& file_path) {
+		explicit ImuFileLoader(const std::string& file_path) {
 		open(file_path);
 	}
 
@@ -30,8 +28,7 @@ public:
 		close();
 	}
 
-	// 作用：open 函数。
-	bool open(const std::string& file_path) {
+		bool open(const std::string& file_path) {
 		close();
 		file_path_ = file_path;
 		line_number_ = 0;
@@ -51,58 +48,47 @@ public:
 		return true;
 	}
 
-	// 作用：close 函数。
-	void close() {
+		void close() {
 		if (stream_.is_open()) {
 			stream_.close();
 		}
 		file_format_ = FileFormat::kUnknown;
 	}
 
-	// 作用：isOpen 函数。
-	bool isOpen() const {
+		bool isOpen() const {
 		return stream_.is_open();
 	}
 
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：readNext 函数。
-	bool readNext(ImuData& out_data) {
+			bool readNext(ImuData& out_data) {
 		if (!stream_.is_open()) {
 			last_error_ = "file is not open";
 			return false;
 		}
 
 		if (file_format_ == FileFormat::kBinaryDouble7) {
-			// 作用：readNextBinary 函数。
-			return readNextBinary(out_data);
+						return readNextBinary(out_data);
 		}
 		if (file_format_ == FileFormat::kText) {
-			// 作用：readNextText 函数。
-			return readNextText(out_data);
+						return readNextText(out_data);
 		}
 
 		last_error_ = "unknown file format";
 		return false;
 	}
 
-	// 作用：fileFormat 函数。
-	FileFormat fileFormat() const {
+		FileFormat fileFormat() const {
 		return file_format_;
 	}
 
-	// 作用：isBinary 函数。
-	bool isBinary() const {
+		bool isBinary() const {
 		return file_format_ == FileFormat::kBinaryDouble7;
 	}
 
-	// 作用：isText 函数。
-	bool isText() const {
+		bool isText() const {
 		return file_format_ == FileFormat::kText;
 	}
 
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：readNextText 函数。
-	bool readNextText(ImuData& out_data) {
+			bool readNextText(ImuData& out_data) {
 		if (!stream_.is_open()) {
 			last_error_ = "file is not open";
 			return false;
@@ -135,8 +121,7 @@ public:
 		return false;
 	}
 
-	// 作用：readNextBinary 函数。
-	bool readNextBinary(ImuData& out_data) {
+		bool readNextBinary(ImuData& out_data) {
 		if (!stream_.is_open()) {
 			last_error_ = "file is not open";
 			return false;
@@ -179,25 +164,20 @@ public:
 		}
 	}
 
-	// 作用：lineNumber 函数。
-	std::uint64_t lineNumber() const {
+		std::uint64_t lineNumber() const {
 		return line_number_;
 	}
 
-	// 作用：badLineCount 函数。
-	std::uint64_t badLineCount() const {
+		std::uint64_t badLineCount() const {
 		return bad_line_count_;
 	}
 
-	// 作用：lastError 函数。
-	const std::string& lastError() const {
+		const std::string& lastError() const {
 		return last_error_;
 	}
 
 private:
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：detectFileFormat 函数。
-	bool detectFileFormat() {
+			bool detectFileFormat() {
 		constexpr std::streamsize kProbeBytes = 4096;
 		char probe[kProbeBytes]{};
 
@@ -247,15 +227,11 @@ private:
 		return true;
 	}
 
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：isAsciiSpace 函数。
-	static bool isAsciiSpace(char c) {
+			static bool isAsciiSpace(char c) {
 		return std::isspace(static_cast<unsigned char>(c)) != 0;
 	}
 
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：parseDoubleToken 函数。
-	static bool parseDoubleToken(const char*& p, double& value) {
+			static bool parseDoubleToken(const char*& p, double& value) {
 		while (*p != '\0' && isAsciiSpace(*p)) {
 			++p;
 		}
@@ -276,9 +252,7 @@ private:
 		return true;
 	}
 
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：parseLine 函数。
-	static bool parseLine(const std::string& line, ImuData& out_data) {
+			static bool parseLine(const std::string& line, ImuData& out_data) {
 		const char* p = line.c_str();
 
 		if (!parseDoubleToken(p, out_data.time)) {
@@ -307,8 +281,7 @@ private:
 			++p;
 		}
 
-		// 作用：此处说明当前字段或步骤的用途。
-		return *p == '\0';
+				return *p == '\0';
 	}
 
 private:

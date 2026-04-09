@@ -3,22 +3,19 @@
 #include <array>
 #include <cmath>
 
-// 作用：定义 ImuData 数据结构。
+// 传感器输入：IMU 增量数据结构 (角速度与加速度增量)
 struct ImuData {
 	double time = 0.0;
 
-	// 作用：此处说明当前字段或步骤的用途。
-	double dtheta_x = 0.0;
+		double dtheta_x = 0.0;
 	double dtheta_y = 0.0;
 	double dtheta_z = 0.0;
 
-	// 作用：此处说明当前字段或步骤的用途。
-	double dvel_x = 0.0;
+		double dvel_x = 0.0;
 	double dvel_y = 0.0;
 	double dvel_z = 0.0;
 
-	// 作用：isFinite 函数。
-	bool isFinite() const {
+		bool isFinite() const {
 		return std::isfinite(time) &&
 			   std::isfinite(dtheta_x) &&
 			   std::isfinite(dtheta_y) &&
@@ -29,56 +26,40 @@ struct ImuData {
 	}
 };
 
-// 作用：此处说明当前字段或步骤的用途。
-	// 作用：此处说明当前字段或步骤的用途。
-// 作用：定义 ImuMeasureData 数据结构。
-struct ImuMeasureData {
+	struct ImuMeasureData {
 	ImuData imupre_;
 	ImuData imucur_;
 
-	// 作用：shiftAndSetCurrent 函数。
-	void shiftAndSetCurrent(const ImuData& imu_cur) {
+		void shiftAndSetCurrent(const ImuData& imu_cur) {
 		imupre_ = imucur_;
 		imucur_ = imu_cur;
 	}
 };
 
-// 作用：定义 PvaData 数据结构。
+// 导航状态：瞬时位置、速度、姿态结构 (Pos/Vel/Att)
 struct PvaData {
-	// 作用：此处说明当前字段或步骤的用途。
-	std::array<double, 3> blh = {0.0, 0.0, 0.0};
-	// 作用：此处说明当前字段或步骤的用途。
-	std::array<double, 3> vel_n = {0.0, 0.0, 0.0};
-	// 作用：此处说明当前字段或步骤的用途。
-	std::array<double, 3> euler = {0.0, 0.0, 0.0};
+		std::array<double, 3> blh = {0.0, 0.0, 0.0};
+		std::array<double, 3> vel_n = {0.0, 0.0, 0.0};
+		std::array<double, 3> euler = {0.0, 0.0, 0.0};
 };
 
-// 作用：定义 ImuErrorData 数据结构。
 struct ImuErrorData {
-	// 作用：此处说明当前字段或步骤的用途。
-	std::array<double, 3> gyro_bias = {0.0, 0.0, 0.0};
+		std::array<double, 3> gyro_bias = {0.0, 0.0, 0.0};
 	std::array<double, 3> accel_bias = {0.0, 0.0, 0.0};
 
-	// 作用：此处说明当前字段或步骤的用途。
-	// 作用：此处说明当前字段或步骤的用途。
-	std::array<double, 3> gyro_random_walk = {0.0, 0.0, 0.0};
+			std::array<double, 3> gyro_random_walk = {0.0, 0.0, 0.0};
 	std::array<double, 3> accel_random_walk = {0.0, 0.0, 0.0};
 
-	// 作用：此处说明当前字段或步骤的用途。
-	std::array<double, 3> gyro_bias_instability = {0.0, 0.0, 0.0};
+		std::array<double, 3> gyro_bias_instability = {0.0, 0.0, 0.0};
 	std::array<double, 3> accel_bias_instability = {0.0, 0.0, 0.0};
 
-	// 作用：此处说明当前字段或步骤的用途。
-	std::array<double, 3> gyro_scale = {0.0, 0.0, 0.0};
+		std::array<double, 3> gyro_scale = {0.0, 0.0, 0.0};
 	std::array<double, 3> accel_scale = {0.0, 0.0, 0.0};
 
-	// 作用：此处说明当前字段或步骤的用途。
-	std::array<double, 3> gyro_scale_instability = {0.0, 0.0, 0.0};
+		std::array<double, 3> gyro_scale_instability = {0.0, 0.0, 0.0};
 	std::array<double, 3> accel_scale_instability = {0.0, 0.0, 0.0};
 };
 
-// 作用：此处说明当前字段或步骤的用途。
-// 作用：定义 NavigationStatusData 数据结构。
 struct NavigationStatusData {
 	PvaData pvapre_;
 	PvaData pvacur_;

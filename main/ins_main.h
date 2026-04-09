@@ -4,47 +4,38 @@
 #include "../common/erathupdate.h"
 #include "../fileio/imu.h"
 namespace ins {
-// 作用：定义 InsCompensatedIncrement 数据结构。
 struct InsCompensatedIncrement {
 	Vec3 dtheta_b;
 	Vec3 dvel_b;
 	Vec3 zeta_n;
 	double dt = 0.0;
 };
-// 作用：定义 AttitudeUpdateResult 数据结构。
 struct AttitudeUpdateResult {
 	Quaternion q_nb_cur;
 	Blh blh_half;
 	Vec3 omega_in_n_half;
 };
-// 作用：quatInverseUnit 函数。
 inline Quaternion quatInverseUnit(const Quaternion& q) {
 	return Quaternion{q.w, -q.x, -q.y, -q.z};
 }
-// 作用：addVec3 函数。
 inline Vec3 addVec3(const Vec3& a, const Vec3& b) {
 	return Vec3{a.x + b.x, a.y + b.y, a.z + b.z};
 }
-// 作用：subVec3 函数。
 inline Vec3 subVec3(const Vec3& a, const Vec3& b) {
 	return Vec3{a.x - b.x, a.y - b.y, a.z - b.z};
 }
-// 作用：scaleVec3 函数。
 inline Vec3 scaleVec3(const Vec3& v, double s) {
 	return Vec3{v.x * s, v.y * s, v.z * s};
 }
-// 作用：dotVec3 函数。
 inline double dotVec3(const Vec3& a, const Vec3& b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
-// 作用：crossVec3 函数。
 inline Vec3 crossVec3(const Vec3& a, const Vec3& b) {
 	return Vec3{
 		a.y * b.z - a.z * b.y,
 		a.z * b.x - a.x * b.z,
 		a.x * b.y - a.y * b.x};
 }
-// 作用：quatMul 函数。
 // 注意：移除内部归一化，避免多次连乘累积精度损失
 // 归一化应在最终结果统一进行
 inline Quaternion quatMul(const Quaternion& p, const Quaternion& q) {
@@ -55,26 +46,20 @@ inline Quaternion quatMul(const Quaternion& p, const Quaternion& q) {
 	r.z = p.w * q.z + p.x * q.y - p.y * q.x + p.z * q.w;
 	return r;  // 不归一化，由调用方统一处理
 }
-// 作用：normalizeQuaternionSafe 函数。
 inline Quaternion normalizeQuaternionSafe(const Quaternion& q,
 								const Quaternion& fallback = Quaternion{}) {
 	const double n2 = q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z;
 	if (!std::isfinite(n2) || n2 <= 1e-20) {
-		// 作用：normalizeQuaternion 函数。
-		return normalizeQuaternion(fallback);
+				return normalizeQuaternion(fallback);
 	}
-	// 作用：normalizeQuaternion 函数。
-	return normalizeQuaternion(q);
+		return normalizeQuaternion(q);
 }
-// 作用：imuDeltaTheta 函数。
 inline Vec3 imuDeltaTheta(const ImuData& imu) {
 	return Vec3{imu.dtheta_x, imu.dtheta_y, imu.dtheta_z};
 }
-// 作用：imuDeltaVel 函数。
 inline Vec3 imuDeltaVel(const ImuData& imu) {
 	return Vec3{imu.dvel_x, imu.dvel_y, imu.dvel_z};
 }
-// 作用：safeScaleDenominator 函数。
 inline double safeScaleDenominator(double scale_error) {
 	const double denom = 1.0 + scale_error;
 	if (std::fabs(denom) < 1e-8) {
@@ -82,7 +67,6 @@ inline double safeScaleDenominator(double scale_error) {
 	}
 	return denom;
 }
-// 作用：compensateSingleImuByError 函数。
 inline ImuData compensateSingleImuByError(
 		const ImuData& imu_raw,
 		const ImuErrorData& imu_error,
@@ -102,7 +86,6 @@ inline ImuData compensateSingleImuByError(
 	imu_corr.dvel_z = inv_accel_scale_z * (imu_raw.dvel_z - imu_error.accel_bias[2] * dt);
 	return imu_corr;
 }
-// 作用：compensateImuMeasureByError 函数。
 inline ImuMeasureData compensateImuMeasureByError(
 		const ImuMeasureData& imu_measure_raw,
 		const ImuErrorData& imu_error,
@@ -116,37 +99,30 @@ inline ImuMeasureData compensateImuMeasureByError(
 	imu_measure_corr.imucur_ = compensateSingleImuByError(imu_measure_raw.imucur_, imu_error, dt);
 	return imu_measure_corr;
 }
-// 作用：pvaVelToVec3 函数。
 inline Vec3 pvaVelToVec3(const PvaData& pva) {
 	return Vec3{pva.vel_n[0], pva.vel_n[1], pva.vel_n[2]};
 }
-// 作用：pvaBlhToBlh 函数。
 inline Blh pvaBlhToBlh(const PvaData& pva) {
 	return Blh{pva.blh[0], pva.blh[1], pva.blh[2]};
 }
-// 作用：pvaEulerToEuler 函数。
 inline Euler pvaEulerToEuler(const PvaData& pva) {
 	return Euler{pva.euler[0], pva.euler[1], pva.euler[2]};
 }
-// 作用：vec3ToPvaVel 函数。
 inline void vec3ToPvaVel(const Vec3& v, PvaData& pva) {
 	pva.vel_n[0] = v.x;
 	pva.vel_n[1] = v.y;
 	pva.vel_n[2] = v.z;
 }
-// 作用：blhToPvaBlh 函数。
 inline void blhToPvaBlh(const Blh& blh_pos, PvaData& pva) {
 	pva.blh[0] = blh_pos.lat;
 	pva.blh[1] = blh_pos.lon;
 	pva.blh[2] = blh_pos.h;
 }
-// 作用：eulerToPvaEuler 函数。
 inline void eulerToPvaEuler(const Euler& e, PvaData& pva) {
 	pva.euler[0] = e.roll;
 	pva.euler[1] = e.pitch;
 	pva.euler[2] = e.yaw;
 }
-// 作用：estimateMidpointBlh 函数。
 inline Blh estimateMidpointBlh(const Blh& blh_pre,
 							   const Vec3& vel_ref_n,
 							   double dt) {
@@ -163,7 +139,6 @@ inline Blh estimateMidpointBlh(const Blh& blh_pre,
 		0.5 * dt * vel_ref_n.y / ((earth_pre.rn + h_half) * safe_cos_lat_half);
 	return Blh{lat_half, lon_half, h_half};
 }
-// 作用：compensateImuConingSculling 函数。
 inline InsCompensatedIncrement compensateImuConingSculling(
 		const ImuData& imu_pre,
 		const ImuData& imu_cur,
@@ -187,7 +162,6 @@ inline InsCompensatedIncrement compensateImuConingSculling(
 	out.zeta_n = Vec3{0.0, 0.0, 0.0};
 	return out;
 }
-// 作用：updateAttitude 函数。
 // 修正Issue 4：通过速度积分计算中间位置，移除对 q_ne_cur 的依赖，符合先位置后姿态的顺序
 inline Quaternion updateAttitude(
 		const PvaData& pva_pre,
@@ -216,10 +190,8 @@ inline Quaternion updateAttitude(
 	const Quaternion q_bb = rotvec2quat(dtheta_b);
 	const Quaternion q_nb_cur = quatMul(quatMul(q_nn, q_nb_pre), q_bb);
 	
-	// 作用：normalizeQuaternionSafe 函数。
-	return normalizeQuaternionSafe(q_nb_cur, q_nb_pre);
+		return normalizeQuaternionSafe(q_nb_cur, q_nb_pre);
 }
-// 作用：updateVelocityCorrect 函数。
 inline Vec3 updateVelocityCorrect(
 		const PvaData& pva_pre,
 		const Quaternion& q_nb_pre,
@@ -267,7 +239,6 @@ inline Vec3 updateVelocityCorrect(
 	// 4) 最终k时刻速度。
 	return addVec3(vel_pre, addVec3(dv_fn, dv_gn));
 }
-// 作用：updatePosition 函数。
 inline Blh updatePosition(
 		const PvaData& pva_pre,
 		const Vec3& vel_cur,
@@ -299,7 +270,6 @@ inline Blh updatePosition(
 	blh_cur.h = blh_pre.h - dt * vel_mid.z;
 	return blh_cur;
 }
-// 作用：propagateIns 函数。
 inline void propagateIns(
 		const ImuMeasureData& imu_measure,
 		NavigationStatusData& nav_state,

@@ -119,12 +119,12 @@ def main() -> None:
 		dpi=args.dpi,
 	)
 
-	# 姿态 (rad → deg)
+	# 姿态 (已在C++端转为deg，直接绘制)
 	save_three_axis_plot(
 		t,
-		data[:, 7] * deg_per_rad,
-		data[:, 8] * deg_per_rad,
-		data[:, 9] * deg_per_rad,
+		data[:, 7],
+		data[:, 8],
+		data[:, 9],
 		labels=("Roll", "Pitch", "Yaw"),
 		ylabel="Attitude std (deg)",
 		title="Attitude Std",
@@ -136,9 +136,9 @@ def main() -> None:
 	# 陀螺零偏 (rad/s → deg/h)
 	save_three_axis_plot(
 		t,
-		data[:, 10] * deg_per_rad * 3600,
-		data[:, 11] * deg_per_rad * 3600,
-		data[:, 12] * deg_per_rad * 3600,
+		data[:, 10],
+		data[:, 11],
+		data[:, 12],
 		labels=("Gyro bias X", "Gyro bias Y", "Gyro bias Z"),
 		ylabel="Gyro bias std (deg/h)",
 		title="Gyroscope Bias Std",
@@ -150,9 +150,9 @@ def main() -> None:
 	# 陀螺比例因子 (ratio → ppm)
 	save_three_axis_plot(
 		t,
-		data[:, 16] * ppm_per_ratio,
-		data[:, 17] * ppm_per_ratio,
-		data[:, 18] * ppm_per_ratio,
+		data[:, 16],
+		data[:, 17],
+		data[:, 18],
 		labels=("Gyro scale X", "Gyro scale Y", "Gyro scale Z"),
 		ylabel="Gyro scale std (ppm)",
 		title="Gyroscope Scale Std",
@@ -164,9 +164,9 @@ def main() -> None:
 	# 加速度计零偏 (m/s² → mGal)
 	save_three_axis_plot(
 		t,
-		data[:, 13] * mgal_per_mps2,
-		data[:, 14] * mgal_per_mps2,
-		data[:, 15] * mgal_per_mps2,
+		data[:, 13],
+		data[:, 14],
+		data[:, 15],
 		labels=("Accel bias X", "Accel bias Y", "Accel bias Z"),
 		ylabel="Accel bias std (mGal)",
 		title="Accelerometer Bias Std",
@@ -178,9 +178,9 @@ def main() -> None:
 	# 加速度计比例因子 (ratio → ppm)
 	save_three_axis_plot(
 		t,
-		data[:, 19] * ppm_per_ratio,
-		data[:, 20] * ppm_per_ratio,
-		data[:, 21] * ppm_per_ratio,
+		data[:, 19],
+		data[:, 20],
+		data[:, 21],
 		labels=("Accel scale X", "Accel scale Y", "Accel scale Z"),
 		ylabel="Accel scale std (ppm)",
 		title="Accelerometer Scale Std",
