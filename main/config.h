@@ -16,8 +16,12 @@ namespace ins {
 // 作用：degPerHourToRadPerSec 函数 (提供参数转换)
 inline double degPerHourToRadPerSec(double deg_per_hour) {
 	return deg2rad(deg_per_hour) / 3600.0;
+}inline double degPerSqrtHourToRadPerSqrtSec(double val) {
+        return deg2rad(val) / 60.0;
 }
-inline double mGalToMps2(double mgal) {
+inline double mpsPerSqrtHourToMps2PerSqrtHz(double val) {
+        return val / 60.0;
+}inline double mGalToMps2(double mgal) {
 	return mgal * 1e-5;
 }
 inline double ppmToRatio(double ppm) {

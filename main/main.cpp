@@ -13,22 +13,8 @@
 #include "../fileio/imufileloader.h"
 #include "fusion_workflow.h"
 #include "is_update.h"
+#include "config.h"
 namespace ins {
-inline double degPerHourToRadPerSec(double deg_per_hour) {
-		return deg2rad(deg_per_hour) / 3600.0;
-}
-inline double degPerSqrtHourToRadPerSqrtSec(double deg_per_sqrt_hour) {
-		return deg2rad(deg_per_sqrt_hour) / std::sqrt(3600.0);
-}
-inline double mGalToMps2(double mgal) {
-	return mgal * 1e-5;
-}
-inline double mpsPerSqrtHourToMps2PerSqrtHz(double mps_per_sqrt_hour) {
-	return mps_per_sqrt_hour / std::sqrt(3600.0);
-}
-inline double ppmToRatio(double ppm) {
-	return ppm * 1e-6;
-}
 inline void normalizeGnssAngleToRadIfNeeded(GnssData& gnss) {
 	const double kRadMax = 3.2;
 	if (std::fabs(gnss.latitude) > kRadMax || std::fabs(gnss.longitude) > kRadMax) {
@@ -36,51 +22,6 @@ inline void normalizeGnssAngleToRadIfNeeded(GnssData& gnss) {
 		gnss.longitude = deg2rad(gnss.longitude);
 	}
 }
-struct InitialParameterConfig {
-	bool use_first_gnss_position = false;
-	std::array<double, 3> init_blh = {30.4604325443,114.4725046685,23.000};
-	bool init_blh_in_degree = true;
-	std::array<double, 3> init_vel_n = {0.0, 0.0, 0.0};
-	std::array<double, 3> init_euler = {1.63086, -0.13135, 276.8827};
-	bool init_euler_in_degree = true;
-	ImuErrorData init_imu_error = [] {
-		ImuErrorData v;
-		v.gyro_random_walk = {0.2, 0.2, 0.2};
-		v.accel_random_walk = {0.2, 0.2, 0.2};
-		return v;
-	}();
-	std::array<double, 3> init_gyro_bias = {0.0, 0.0, 0.0};
-	std::array<double, 3> init_accel_bias = {0.0, 0.0, 0.0};
-	std::array<double, 3> init_gyro_scale = {0.0, 0.0, 0.0};
-	std::array<double, 3> init_accel_scale = {0.0, 0.0, 0.0};
-	std::array<double, 3> pos_std = {0.1, 0.1, 0.1};                          // m
-	std::array<double, 3> vel_std = {0.1, 0.1, 0.1};                              // m/s
-	std::array<double, 3> att_std = {deg2rad(0.1), deg2rad(0.1), deg2rad(0.2)};  // rad
-	std::array<double, 3> gyro_bias_std = {600, 600, 600};
-	std::array<double, 3> accel_bias_std = {3000, 3000, 3000};
-	std::array<double, 3> gyro_scale_std = {600, 600, 600};
-	std::array<double, 3> accel_scale_std = {3000, 3000, 3000};
-	std::array<double, 3> gyro_bias_process_std = {200, 200, 200};
-	std::array<double, 3> accel_bias_process_std = {1000, 1000, 1000};
-	std::array<double, 3> gyro_scale_process_std = {200, 200, 200};
-	std::array<double, 3> accel_scale_process_std = {1000, 1000, 1000};
-};
-struct MainProgramConfig {
-	std::string imu_file_path = "data/ICM20602.txt";
-	std::string gnss_file_path = "data/GNSS_RTK.txt";
-	std::string output_dir = "data";
-	double corrtime_gb = 3600.0;
-	double corrtime_ab = 3600.0;
-	double corrtime_gs = 3600.0;
-	double corrtime_as = 3600.0;
-	std::array<double, 3> antenna_lever_arm_b = {-0.073, 0.302, 0.087};
-	double process_start_s = 357473;
-	double process_end_s = -1.0;
-	double gnss_sync_tolerance = 1e-3;
-	std::size_t progress_bar_width = 40;
-	std::size_t progress_update_step = 5000;
-	InitialParameterConfig init;
-};
 inline bool fileExists(const std::string& file_path) {
 		std::ifstream ifs(file_path, std::ios::binary);
 	return ifs.good();
@@ -89,7 +30,7 @@ inline std::string resolveImuFilePath(const MainProgramConfig& cfg) {
 	if (!cfg.imu_file_path.empty() && fileExists(cfg.imu_file_path)) {
 		return cfg.imu_file_path;
 	}
-	throw std::runtime_error("没imu锟侥硷拷");
+	throw std::runtime_error("Cannot resolve IMU file path");
 }
 inline std::size_t countTextLinesFast(const std::string& file_path) {
 		std::ifstream ifs(file_path);
@@ -458,7 +399,7 @@ inline void printProgressBar(std::size_t processed, std::size_t total, std::size
 	if (total == 0) {
 		const char spinner[4] = {'|', '/', '-', '\\'};
 		const char c = spinner[processed % 4];
-		std::cout << "\r[" << c << "] 锟窖达拷IMU: " << processed << std::flush;
+		std::cout << "\r[" << c << "] Processed IMU: " << processed << std::flush;
 		return;
 	}
 	if (processed > total) {
@@ -477,31 +418,31 @@ inline int RunGnssInsMain(const MainProgramConfig& cfg = MainProgramConfig()) {
 	const std::string imu_file_path = resolveImuFilePath(cfg);
 	ImuFileLoader imu_loader;
 	if (!imu_loader.open(imu_file_path)) {
-		throw std::runtime_error("没imu锟侥硷拷");
+		throw std::runtime_error("Cannot open IMU file");
 	}
 	GnssFileLoader gnss_loader;
 	const bool gnss_open_ok = gnss_loader.open(cfg.gnss_file_path);
 	FileSaver saver;
 	if (!saver.openDefaultFiles(cfg.output_dir)) {
-		throw std::runtime_error("锟津开斤拷锟侥硷拷失");
+		throw std::runtime_error("Failed to open output files");
 	}
 	ImuData imu_pre;
 	ImuData imu_cur;
 	if (!imu_loader.readNext(imu_pre)) {
-		throw std::runtime_error("没imu锟侥硷拷");
+		throw std::runtime_error("Cannot read first IMU record");
 	}
 	if (!imu_loader.readNext(imu_cur)) {
-		throw std::runtime_error("没imu锟侥硷拷");
+		throw std::runtime_error("Cannot read second IMU record");
 	}
 	const double imu_file_t0 = imu_pre.time;
 	const double start_time = (cfg.process_start_s < 0.0) ? imu_file_t0 : cfg.process_start_s;
 	if (cfg.process_end_s >= 0.0 && cfg.process_end_s < start_time) {
-		throw std::runtime_error("时锟戒窗?? end诘锟絪tart??1");
+		throw std::runtime_error("Time window error: end < start");
 	}
 	while (imu_cur.time < start_time) {
 		imu_pre = imu_cur;
 		if (!imu_loader.readNext(imu_cur)) {
-			throw std::runtime_error("时锟戒窗愠拷锟絀MU锟侥硷拷围");
+			throw std::runtime_error("Time window exceeds IMU file bounds");
 		}
 	}
 	GnssData gnss_next;
@@ -646,20 +587,20 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 		const std::array<double, 3> gs_std = extractStd(p, ErrorStateIndex21::kGyroScale);
 		const std::array<double, 3> as_std = extractStd(p, ErrorStateIndex21::kAccelScale);
 		if (!saver.writeTruthLine(imu_cur.time, nav.pvacur_)) {
-			throw std::runtime_error("写Navresult失");
+			throw std::runtime_error("Failed to write Nav result");
 		}
 		if (!saver.writeImuErrorLine(imu_cur.time, nav.imuerror_)) {
-			throw std::runtime_error("写Imu_Error失");
+			throw std::runtime_error("Failed to write IMU Error result");
 		}
 		if (!saver.writeStateStdLine(imu_cur.time, pos_std, vel_std, att_std, gb_std, ab_std, gs_std, as_std)) {
-			throw std::runtime_error("写STD_result失");
+			throw std::runtime_error("Failed to write STD result");
 		}
 		
 		// 检查协方差对角线元素是否都为正
 		auto checkCov = [&p]() {
 			for (int i = 0; i < p.rows(); ++i) {
 				if (p(i, i) < 0.0) {
-					std::cerr << "警告: 协方差对角线元素 [" << i << ", " << i << "] 为负数: " << p(i, i) << std::endl;
+					std::cerr << "Warning: Covariance diagonal element [" << i << ", " << i << "] is negative: " << p(i, i) << std::endl;
 					return false;
 				}
 			}
@@ -681,17 +622,17 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 	printProgressBar((total_records > 0) ? total_records : processed,
 					 total_records,
 					 cfg.progress_bar_width);
-	std::cout << "\n系锟缴ｏ拷驯锟? "
+	std::cout << "\nSystem execution completed. Results saved: "
 			  << FileSaver::kNavResultFileName << ", "
 			  << FileSaver::kImuErrorFileName << ", "
 			  << FileSaver::kStdResultFileName << std::endl;
 	if (!gnss_open_ok) {
-		std::cout << "示" << std::endl;
+		std::cout << "No GNSS file provided." << std::endl;
 	}
 	return 0;
 }
 inline void printMainUsage(const char* exe_name) {
-	std::cout << "锟矫凤拷: " << exe_name
+	std::cout << "Usage: " << exe_name
 			  << " [--imu <imu_file>] [--gnss <gnss_file>] [--out <output_dir>]"
 			  << " [--sync <seconds>]"
 			  << " [--corrtime-gb <seconds>] [--corrtime-ab <seconds>]"
@@ -709,7 +650,7 @@ inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 		}
 		auto needValue = [&](const char* opt_name) -> std::string {
 			if (i + 1 >= argc) {
-				throw std::runtime_error(std::string("缺取?? ") + opt_name);
+				throw std::runtime_error(std::string("Missing argument value for ") + opt_name);
 			}
 			++i;
 			return std::string(argv[i]);
@@ -741,7 +682,7 @@ inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 		} else if (arg == "--end") {
 			cfg.process_end_s = std::stod(needValue("--end"));
 		} else {
-			throw std::runtime_error("未知错误: " + arg);
+			throw std::runtime_error("Unknown argument: " + arg);
 		}
 	}
 	return cfg;
@@ -756,7 +697,7 @@ int main(int argc, char** argv) {
 		if (std::strcmp(e.what(), "help requested") == 0) {
 			return 0;
 		}
-		std::cerr << "参数解析失败: " << e.what() << std::endl;
+		std::cerr << "Configuration parsing failed: " << e.what() << std::endl;
 		ins::printMainUsage((argc > 0 && argv[0] != nullptr) ? argv[0] : "program");
 		return 1;
 	}
