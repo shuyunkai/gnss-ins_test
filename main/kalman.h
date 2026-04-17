@@ -240,10 +240,10 @@ inline double clampSymmetric(double v, double abs_limit) {
 	}
 	return v;
 }
-class StandardKalmanFilter {
+class ExtendedKalmanFilter {
 public:
-	StandardKalmanFilter() = default;
-		explicit StandardKalmanFilter(std::size_t state_dim) {
+	ExtendedKalmanFilter() = default;
+		explicit ExtendedKalmanFilter(std::size_t state_dim) {
 		resize(state_dim);
 	}
 		void resize(std::size_t state_dim) {
@@ -660,7 +660,7 @@ inline void feedbackInsClosedLoopFrom21State(
 	nav_state.pvapre_ = corrected;
 }
 inline void gnssPositionUpdateAndFeedback21(
-		StandardKalmanFilter& kf,
+		ExtendedKalmanFilter& kf,
 		const Matrix& residual_z,
 		const Matrix& r,
 		NavigationStatusData& nav_state,
@@ -695,7 +695,7 @@ inline void gnssPositionUpdateAndFeedback21(
 	}
 }
 inline void gnssPositionVelocityUpdateAndFeedback21(
-		StandardKalmanFilter& kf,
+		ExtendedKalmanFilter& kf,
 		const Matrix& residual_z,
 		const Matrix& r,
 		NavigationStatusData& nav_state,

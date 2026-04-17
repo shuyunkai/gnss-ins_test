@@ -186,12 +186,15 @@ inline Quaternion updateAttitude(
 
 	// 3. 按 qnn * qnb_pre * qbb 更新姿态
 	const Quaternion q_nb_pre = euler2quat(pvaEulerToEuler(pva_pre));
-	const Quaternion q_nn = rotvec2quat(scaleVec3(omega_in_n, dt));
+	// 【修正核心BUG】：导航系相对于惯性系的旋转，用来更新从载体到导航系的姿态时，
+	// 需左乘逆向旋转(即与导航系旋转方向相反)，因此必须使用负号 -dt
+	const Quaternion q_nn = rotvec2quat(scaleVec3(omega_in_n, -dt));
 	const Quaternion q_bb = rotvec2quat(dtheta_b);
 	const Quaternion q_nb_cur = quatMul(quatMul(q_nn, q_nb_pre), q_bb);
-	
-		return normalizeQuaternionSafe(q_nb_cur, q_nb_pre);
+
+	return normalizeQuaternionSafe(q_nb_cur, q_nb_pre);
 }
+
 inline Vec3 updateVelocityCorrect(
 		const PvaData& pva_pre,
 		const Quaternion& q_nb_pre,

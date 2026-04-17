@@ -10,14 +10,14 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument(
 		"--std",
 		type=str,
-		default="data/STD_result.txt",
-		help="标准差文件路径（默认data/STD_result.txt）",
+		default="data_ICM20602/STD_result.txt",
+		help="标准差文件路径（默认data_ICM20602/STD_result.txt）",
 	)
 	parser.add_argument(
 		"--out-dir",
 		type=str,
-		default="data",
-		help="图片输出目录（默认data）",
+		default="data_ICM20602",
+		help="图片输出目录（默认data_ICM20602）",
 	)
 	parser.add_argument(
 		"--dpi",

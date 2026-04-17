@@ -1,4 +1,4 @@
-﻿#include <algorithm>
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <cmath>
@@ -117,7 +117,7 @@ inline Matrix buildAlignedTransitionF(double dt,
 	const double tab_safe = (t_ab > 1e-6) ? t_ab : 1e-6;
 	const double tgs_safe = (t_gs > 1e-6) ? t_gs : 1e-6;
 	const double tas_safe = (t_as > 1e-6) ? t_as : 1e-6;
-	// 修正Issue 1：使用pvapre_而不是pvacur_来进行线性化
+	// ����Issue 1��ʹ��pvapre_������pvacur_���������Ի�
 	const PvaData& pva = nav_state.pvapre_;
 	const Blh blh{pva.blh[0], pva.blh[1], pva.blh[2]};
 	const Vec3 vel_n{pva.vel_n[0], pva.vel_n[1], pva.vel_n[2]};
@@ -284,7 +284,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 		q_c(12 + i, 12 + i) = 2.0 * sigma_gs * sigma_gs / tgs_safe;
 		q_c(15 + i, 15 + i) = 2.0 * sigma_as * sigma_as / tas_safe;
 	}
-	// 修正Issue 3：G(tk-1)使用k-1时刻姿态，G(tk)使用k时刻姿态
+	// ����Issue 3��G(tk-1)ʹ��k-1ʱ����̬��G(tk)ʹ��kʱ����̬
 	const PvaData& pva_km1 = nav_state.pvapre_;
 	const Euler e_km1{pva_km1.euler[0], pva_km1.euler[1], pva_km1.euler[2]};
 	const Mat3 c_nb_km1_m3 = quat2dcm(euler2quat(e_km1));
@@ -295,7 +295,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 	const Mat3 c_nb_curr_m3 = quat2dcm(euler2quat(e_curr));
 	const Matrix c_nb_curr = mat3ToMatrix(c_nb_curr_m3);
 
-	// g_km1 使用 k-1 时刻状态 (c_nb_km1)
+	// g_km1 ʹ�� k-1 ʱ��״̬ (c_nb_km1)
 	Matrix g_km1(ErrorStateIndex21::kDim, 18, 0.0);
 	addBlock3x3(g_km1, ErrorStateIndex21::kVel, 0, c_nb_km1, 1.0);
 	addBlock3x3(g_km1, ErrorStateIndex21::kAtt, 3, c_nb_km1, 1.0);
@@ -304,7 +304,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 	addBlock3x3(g_km1, ErrorStateIndex21::kGyroScale, 12, Matrix::identity(3), 1.0);
 	addBlock3x3(g_km1, ErrorStateIndex21::kAccelScale, 15, Matrix::identity(3), 1.0);
 
-	// g_k 使用 k 时刻状态 (c_nb_curr)
+	// g_k ʹ�� k ʱ��״̬ (c_nb_curr)
 	Matrix g_k(ErrorStateIndex21::kDim, 18, 0.0);
 	addBlock3x3(g_k, ErrorStateIndex21::kVel, 0, c_nb_curr, 1.0);
 	addBlock3x3(g_k, ErrorStateIndex21::kAtt, 3, c_nb_curr, 1.0);
@@ -338,7 +338,7 @@ inline Matrix buildInitialCovarianceP0(const InitialParameterConfig& init_cfg) {
 		p0(ErrorStateIndex21::kVel + i, ErrorStateIndex21::kVel + i) =
 				init_cfg.vel_std[i] * init_cfg.vel_std[i];
 		p0(ErrorStateIndex21::kAtt + i, ErrorStateIndex21::kAtt + i) =
-				init_cfg.att_std[i] * init_cfg.att_std[i];
+				deg2rad(init_cfg.att_std[i]) * deg2rad(init_cfg.att_std[i]);
 		const double gb_std = degPerHourToRadPerSec(std::fabs(init_cfg.gyro_bias_std[i]));
 		const double ab_std = mGalToMps2(std::fabs(init_cfg.accel_bias_std[i]));
 		const double gs_std = ppmToRatio(std::fabs(init_cfg.gyro_scale_std[i]));
@@ -378,10 +378,12 @@ inline NavigationStatusData buildInitialNavigationStatus(
 	}
 	nav_init.pvacur_ = nav_init.pvapre_;
 	nav_init.imuerror_ = init_cfg.init_imu_error;
-	nav_init.imuerror_.gyro_bias = init_cfg.init_gyro_bias;
-	nav_init.imuerror_.accel_bias = init_cfg.init_accel_bias;
-	nav_init.imuerror_.gyro_scale = init_cfg.init_gyro_scale;
-	nav_init.imuerror_.accel_scale = init_cfg.init_accel_scale;
+	for (std::size_t i = 0; i < 3; ++i) {
+		nav_init.imuerror_.gyro_bias[i] = degPerHourToRadPerSec(init_cfg.init_gyro_bias[i]);
+		nav_init.imuerror_.accel_bias[i] = mGalToMps2(init_cfg.init_accel_bias[i]);
+		nav_init.imuerror_.gyro_scale[i] = ppmToRatio(init_cfg.init_gyro_scale[i]);
+		nav_init.imuerror_.accel_scale[i] = ppmToRatio(init_cfg.init_accel_scale[i]);
+	}
 	return nav_init;
 }
 inline std::array<double, 3> extractStd(const Matrix& p, std::size_t start_idx) {
@@ -457,7 +459,7 @@ inline int RunGnssInsMain(const MainProgramConfig& cfg = MainProgramConfig()) {
 			cfg.init,
 			has_next_gnss,
 			gnss_next);
-	GnssInsFusionWorkflow workflow;
+		auto runProcessWorkflow = [&](auto& workflow) {
 		Matrix x0(ErrorStateIndex21::kDim, 1, 0.0);
 	const Matrix p0 = buildInitialCovarianceP0(cfg.init);
 	workflow.initialize(nav_init, x0, p0);
@@ -478,41 +480,41 @@ inline int RunGnssInsMain(const MainProgramConfig& cfg = MainProgramConfig()) {
 				step_dt = 1e-6;
 			}
 			
-			// 1. 获取k-1时刻状态（传播前的状态）
+			// 1. ��ȡk-1ʱ��״̬������ǰ��״̬��
 			const NavigationStatusData nav_km1 = workflow.navState();
 
-			// 2. 使用k-1时刻状态构建F矩阵（误差状态方程在名义轨迹附近线性化）
+			// 2. ʹ��k-1ʱ��״̬����F�������״̬����������켣�������Ի���
 			const Matrix f = buildAlignedTransitionF(
 				step_dt,
-				nav_km1,  // 使用k-1时刻状态
+				nav_km1,  // ʹ��k-1ʱ��״̬
 				step_imu,
 				cfg.corrtime_gb,
 				cfg.corrtime_ab,
 				cfg.corrtime_gs,
 				cfg.corrtime_as);
 
-			// 3. 准备传播：将k-1时刻的当前状态设为传播的起始状态（即新的pvapre_）
+			// 3. ׼����������k-1ʱ�̵ĵ�ǰ״̬��Ϊ��������ʼ״̬�����µ�pvapre_��
 			NavigationStatusData nav_after_mech = nav_km1;
-			nav_after_mech.pvapre_ = nav_km1.pvacur_; // 修正：propagateIns使用pvapre_作为起始点，必须设为k-1
+			nav_after_mech.pvapre_ = nav_km1.pvacur_; // ������propagateInsʹ��pvapre_��Ϊ��ʼ�㣬������Ϊk-1
 
-			// 4. 执行INS机械编排（速度/位置/姿态传播），获取k时刻状态
+			// 4. ִ��INS��е���ţ��ٶ�/λ��/��̬����������ȡkʱ��״̬
 			propagateIns(step_imu, nav_after_mech);
-			// 此时 nav_after_mech.pvapre_ 是 k-1, nav_after_mech.pvacur_ 是 k
+			// ��ʱ nav_after_mech.pvapre_ �� k-1, nav_after_mech.pvacur_ �� k
 
-			// 5. 使用k时刻状态构建Q矩阵（梯形积分需要k-1和k时刻的G矩阵）
-			// nav_after_mech.pvapre_ 是 k-1, nav_after_mech.pvacur_ 是 k
+			// 5. ʹ��kʱ��״̬����Q�������λ�����Ҫk-1��kʱ�̵�G����
+			// nav_after_mech.pvapre_ �� k-1, nav_after_mech.pvacur_ �� k
 			const Matrix q = buildAlignedProcessNoiseQ(
 								step_dt,
 								f,
 								step_imu,
-								nav_after_mech,  // 使用包含k-1和k时刻的状态
+								nav_after_mech,  // ʹ�ð���k-1��kʱ�̵�״̬
 				cfg.init,
 				cfg.corrtime_gb,
 				cfg.corrtime_ab,
 				cfg.corrtime_gs,
 				cfg.corrtime_as);
 
-			// 6. 更新workflow状态并执行EKF predict + update
+			// 6. ����workflow״̬��ִ��EKF predict + update
 			workflow.setNavState(nav_after_mech);
 			workflow.processStep(
 				step_imu,
@@ -596,7 +598,7 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 			throw std::runtime_error("Failed to write STD result");
 		}
 		
-		// 检查协方差对角线元素是否都为正
+		// ���Э����Խ���Ԫ���Ƿ�Ϊ��
 		auto checkCov = [&p]() {
 			for (int i = 0; i < p.rows(); ++i) {
 				if (p(i, i) < 0.0) {
@@ -613,7 +615,7 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 			printProgressBar(processed, total_records, cfg.progress_bar_width);
 		}
 		
-		// 更新上一时刻的状态和 IMU 数据
+		// ������һʱ�̵�״̬�� IMU ����
 		imu_pre = imu_cur;
 		if (!imu_loader.readNext(imu_cur)) {
 			break;
@@ -629,7 +631,21 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 	if (!gnss_open_ok) {
 		std::cout << "No GNSS file provided." << std::endl;
 	}
-	return 0;
+
+};
+
+if (cfg.algorithm == FilterAlgorithm::ExtendedKalman) {
+    GnssInsFusionWorkflow<ExtendedKalmanFilter> wf;
+    runProcessWorkflow(wf);
+} else if (cfg.algorithm == FilterAlgorithm::UnscentedKalman) {
+    GnssInsFusionWorkflow<UnscentedKalmanFilter> wf;
+    runProcessWorkflow(wf);
+} else if (cfg.algorithm == FilterAlgorithm::GraphOptimization) {
+    GnssInsFusionWorkflow<GraphOptimization> wf;
+    runProcessWorkflow(wf);
+}
+
+return 0;
 }
 inline void printMainUsage(const char* exe_name) {
 	std::cout << "Usage: " << exe_name
@@ -702,3 +718,5 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 }
+
+

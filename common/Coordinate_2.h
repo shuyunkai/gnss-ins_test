@@ -130,7 +130,7 @@ inline Mat3 euler2dcm(const Euler& e) {
 
 inline Euler dcm2euler(const Mat3& c) {
 	Euler e;
-	e.pitch = std::asin(std::clamp(-c.m[2][0], -1.0, 1.0));
+	e.pitch = std::asin(std::max(-1.0, std::min(1.0, -c.m[2][0])));
 	e.roll = std::atan2(c.m[2][1], c.m[2][2]);
 	e.yaw = std::atan2(c.m[1][0], c.m[0][0]);
 	return e;

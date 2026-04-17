@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import numpy as np
 
-TRUTH_FILE_PATH = "data/truth.nav"
+TRUTH_FILE_PATH = "data_ICM20602/truth.nav"
 
 
 @dataclass
@@ -29,14 +29,14 @@ def parse_args() -> argparse.Namespace:
 	parser.add_argument(
 		"--nav",
 		type=str,
-		default="data/Navresult.txt",
-		help="解算结果文件路径，默认data/Navresult.txt",
+		default="data_ICM20602/Navresult.txt",
+		help="解算结果文件路径，默认data_ICM20602/Navresult.txt",
 	)
 	parser.add_argument(
 		"--out-dir",
 		type=str,
-		default="data",
-		help="图片输出目录，默认data",
+		default="data_ICM20602",
+		help="图片输出目录，默认data_ICM20602",
 	)
 	parser.add_argument(
 		"--truth-angle-unit",

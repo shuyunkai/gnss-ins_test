@@ -6,7 +6,60 @@
 #include "../fileio/imu.h"
 #include "ins_main.h"
 #include "kalman.h"
+#include "ukf.h"
+#include "graph_optimization.h"
 namespace ins {
+
+inline Mat3 transpose3(const Mat3& a) {
+    Mat3 b;
+    for(int i=0; i<3; ++i)
+        for(int j=0; j<3; ++j)
+            b.m[i][j] = a.m[j][i];
+    return b;
+}
+
+inline Matrix extractErrorStateFrom21State(const NavigationStatusData& nominal, const NavigationStatusData& perturbed) {
+    Matrix err(21, 1, 0.0);
+    const LocalPosition pos_nom{nominal.pvacur_.blh[0], nominal.pvacur_.blh[1], nominal.pvacur_.blh[2]};
+    const LocalVelocity vel_nom{nominal.pvacur_.vel_n[0], nominal.pvacur_.vel_n[1], nominal.pvacur_.vel_n[2]};
+    const EarthParameters earth = updateEarthParameters(pos_nom, vel_nom);
+    const double cos_lat = std::cos(nominal.pvacur_.blh[0]);
+    const double safe_cos_lat = (std::fabs(cos_lat) < 1e-8) ? ((cos_lat >= 0.0) ? 1e-8 : -1e-8) : cos_lat;
+
+    err(ErrorStateIndex21::kPos + 0, 0) = (nominal.pvacur_.blh[0] - perturbed.pvacur_.blh[0]) * (earth.rm + nominal.pvacur_.blh[2]);
+    err(ErrorStateIndex21::kPos + 1, 0) = (nominal.pvacur_.blh[1] - perturbed.pvacur_.blh[1]) * ((earth.rn + nominal.pvacur_.blh[2]) * safe_cos_lat);
+    err(ErrorStateIndex21::kPos + 2, 0) = perturbed.pvacur_.blh[2] - nominal.pvacur_.blh[2];
+
+    err(ErrorStateIndex21::kVel + 0, 0) = nominal.pvacur_.vel_n[0] - perturbed.pvacur_.vel_n[0];
+    err(ErrorStateIndex21::kVel + 1, 0) = nominal.pvacur_.vel_n[1] - perturbed.pvacur_.vel_n[1];
+    err(ErrorStateIndex21::kVel + 2, 0) = nominal.pvacur_.vel_n[2] - perturbed.pvacur_.vel_n[2];
+
+    Mat3 c_pert = quat2dcm(euler2quat(Euler{perturbed.pvacur_.euler[0], perturbed.pvacur_.euler[1], perturbed.pvacur_.euler[2]}));
+    Mat3 c_nom = quat2dcm(euler2quat(Euler{nominal.pvacur_.euler[0], nominal.pvacur_.euler[1], nominal.pvacur_.euler[2]}));
+    Mat3 phi_cross = matMul(c_pert, transpose3(c_nom));
+    err(ErrorStateIndex21::kAtt + 0, 0) = phi_cross.m[2][1];
+    err(ErrorStateIndex21::kAtt + 1, 0) = phi_cross.m[0][2];
+    err(ErrorStateIndex21::kAtt + 2, 0) = phi_cross.m[1][0];
+
+    err(ErrorStateIndex21::kGyroBias + 0, 0) = perturbed.imuerror_.gyro_bias[0] - nominal.imuerror_.gyro_bias[0];
+    err(ErrorStateIndex21::kGyroBias + 1, 0) = perturbed.imuerror_.gyro_bias[1] - nominal.imuerror_.gyro_bias[1];
+    err(ErrorStateIndex21::kGyroBias + 2, 0) = perturbed.imuerror_.gyro_bias[2] - nominal.imuerror_.gyro_bias[2];
+
+    err(ErrorStateIndex21::kAccelBias + 0, 0) = perturbed.imuerror_.accel_bias[0] - nominal.imuerror_.accel_bias[0];
+    err(ErrorStateIndex21::kAccelBias + 1, 0) = perturbed.imuerror_.accel_bias[1] - nominal.imuerror_.accel_bias[1];
+    err(ErrorStateIndex21::kAccelBias + 2, 0) = perturbed.imuerror_.accel_bias[2] - nominal.imuerror_.accel_bias[2];
+
+    err(ErrorStateIndex21::kGyroScale + 0, 0) = perturbed.imuerror_.gyro_scale[0] - nominal.imuerror_.gyro_scale[0];
+    err(ErrorStateIndex21::kGyroScale + 1, 0) = perturbed.imuerror_.gyro_scale[1] - nominal.imuerror_.gyro_scale[1];
+    err(ErrorStateIndex21::kGyroScale + 2, 0) = perturbed.imuerror_.gyro_scale[2] - nominal.imuerror_.gyro_scale[2];
+
+    err(ErrorStateIndex21::kAccelScale + 0, 0) = perturbed.imuerror_.accel_scale[0] - nominal.imuerror_.accel_scale[0];
+    err(ErrorStateIndex21::kAccelScale + 1, 0) = perturbed.imuerror_.accel_scale[1] - nominal.imuerror_.accel_scale[1];
+    err(ErrorStateIndex21::kAccelScale + 2, 0) = perturbed.imuerror_.accel_scale[2] - nominal.imuerror_.accel_scale[2];
+    return err;
+}
+
+template <typename FilterType>
 class GnssInsFusionWorkflow {
 public:
     GnssInsFusionWorkflow() : kf_(ErrorStateIndex21::kDim) {}
@@ -35,7 +88,7 @@ public:
         ensureInitialized();
         // 移除重复的propagateIns调用,避免状态被传播两次
         // propagateIns(imu_measure, nav_state_);  // ← 已删除,由main.cpp统一控制
-        kf_.predict(f, q);
+        this->doPredict(imu_measure, f, q);
         if (!has_gnss) {
             nav_state_.pvapre_ = nav_state_.pvacur_;
             return;
@@ -58,7 +111,7 @@ public:
                         const Matrix& q) {
         ensureInitialized();
         propagateIns(imu_measure, nav_state_);
-        kf_.predict(f, q);
+        doPredict(imu_measure, f, q);
         nav_state_.pvapre_ = nav_state_.pvacur_;
     }
         void processGnssUpdate(const GnssData& gnss_data,
@@ -84,9 +137,34 @@ public:
     void setNavState(const NavigationStatusData& new_state) {
         nav_state_ = new_state;
     }
-        const StandardKalmanFilter& kalman() const {
+        const FilterType& kalman() const {
         return kf_;
     }
+
+    // ====== SFINAE Dispatch for predict ======
+    template <typename T = FilterType>
+    typename std::enable_if<!std::is_same<T, UnscentedKalmanFilter>::value>::type
+    doPredict(const ImuMeasureData& imu_measure, const Matrix& f, const Matrix& q) {
+        kf_.predict(f, q);
+    }
+
+    template <typename T = FilterType>
+    typename std::enable_if<std::is_same<T, UnscentedKalmanFilter>::value>::type
+    doPredict(const ImuMeasureData& imu_measure, const Matrix& f, const Matrix& q) {
+        auto f_func = [&](const Matrix& chi_i) {
+            NavigationStatusData temp_nav = nav_state_; // nav_state_ here has pvapre_ = x_{k-1}, pvacur_ = x_{k}
+            temp_nav.pvacur_ = temp_nav.pvapre_; 
+            
+            feedbackInsClosedLoopFrom21State(chi_i, temp_nav);
+            temp_nav.pvapre_ = temp_nav.pvacur_; 
+            
+            propagateIns(imu_measure, temp_nav);
+            
+            return extractErrorStateFrom21State(nav_state_, temp_nav); // nav_state_ is the unperturbed nominal
+        };
+        kf_.predict(f_func, q);
+    }
+
 private:
         static Blh estimateAntennaBlhFromIns(const PvaData& ins_pva,
                                          const std::array<double, 3>& antenna_lever_arm_b) {
@@ -125,6 +203,6 @@ private:
 private:
     bool initialized_ = false;
     NavigationStatusData nav_state_;
-    StandardKalmanFilter kf_;
+    FilterType kf_;
 };
 }  // 命名空间结束
