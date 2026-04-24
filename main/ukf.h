@@ -73,7 +73,7 @@ public:
                 
                 if (i == j) {
                     double val = a(i, i) - sum;
-                    l(i, j) = std::sqrt(val > 0 ? val : 0.0);
+                    l(i, j) = std::sqrt(val > 1e-15 ? val : 1e-15); // 增加对底层奇异的下界保护，防止对角元直接置零
                 } else {
                     double l_jj = l(j, j);
                     l(i, j) = (a(i, j) - sum) / (l_jj > 1e-12 ? l_jj : 1e-12);
@@ -148,6 +148,8 @@ public:
 
 
     // 兼容原有的线性转移矩阵 (将其封装为Lambda非线性函数)
+    // UKF时间更新(预测)步：将所有Sigma点分别代入非线性状态转移函数进行推演，最后利用均值和协方差权重重建出 k 时刻的先验状态与先验P阵
+
     void predict(const Matrix& phi, const Matrix& q) {
         auto linear_f = [&phi](const Matrix& chi_i) { return mul(phi, chi_i); };
         predict(linear_f, q);
@@ -160,6 +162,8 @@ public:
     }
 
     // (3) 步骤3：更新阶段 (Measurement Update)
+    // UKF量测更新步：将预测后的Sigma点映射到实际观测空间，加权求和得出预估观测值，并利用互协方差计算卡尔曼增益系数进而获取后验更新状态
+
     void update(const Matrix& z_measurement, const std::function<Matrix(const Matrix&)>& h_func, const Matrix& r) {
         if (!initialized_) throw std::runtime_error("UKF not initialized");
         
@@ -231,6 +235,8 @@ public:
 
 
     // 兼容原有的线性观测矩阵 (将其封装为Lambda非线性函数)
+    // UKF量测更新步：将预测后的Sigma点映射到实际观测空间，加权求和得出预估观测值，并利用互协方差计算卡尔曼增益系数进而获取后验更新状态
+
     void update(const Matrix& z_residual, const Matrix& h, const Matrix& r) {
         auto linear_h = [&h](const Matrix& chi_i) { return mul(h, chi_i); };
         update(z_residual, linear_h, r);
@@ -258,7 +264,7 @@ public:
         return isPositiveDefiniteMatrix(p_, pd_eps);
     }
 
-    void regularizeCovariance(double diag_floor = 1e-12, double init_jitter = 1e-12, int max_tries = 8) {
+    void regularizeCovariance(double diag_floor = 1e-10, double init_jitter = 1e-10, int max_tries = 10) {
         if (!initialized_) return;
         p_ = symmetrizeMatrix(p_);
         for (std::size_t i = 0; i < p_.rows(); ++i) {
@@ -304,14 +310,36 @@ inline void gnssPositionUpdateAndFeedback21(
     }
     // 纯非线性观测方程 h(\chi_i)：计算真实误差状态 \chi_i 下预期产生的测距残差
     auto h_func = [&](const Matrix& chi_i) {
-        NavigationStatusData temp_nav = nav_state;
-        feedbackInsClosedLoopFrom21State(chi_i, temp_nav);
-        
-        // 摄动后(temp_nav)预测的天线位置(即伪 GNSS)
-        const Blh imu_blh{temp_nav.pvacur_.blh[0], temp_nav.pvacur_.blh[1], temp_nav.pvacur_.blh[2]};
-        const Euler imu_euler{temp_nav.pvacur_.euler[0], temp_nav.pvacur_.euler[1], temp_nav.pvacur_.euler[2]};
-        const Quaternion q_nb = euler2quat(imu_euler);
-        const Mat3 c_nb = quat2dcm(q_nb);
+        // 直接提取位置和姿态误差进行前馈摄动，规避 feedback 函数内部零偏限幅器对非线性传递特性的跳变影响
+        const double d_n = chi_i(ErrorStateIndex21::kPos + 0, 0);
+        const double d_e = chi_i(ErrorStateIndex21::kPos + 1, 0);
+        const double d_d = chi_i(ErrorStateIndex21::kPos + 2, 0);
+        const Vec3 dphi{chi_i(ErrorStateIndex21::kAtt + 0, 0),
+                        chi_i(ErrorStateIndex21::kAtt + 1, 0),
+                        chi_i(ErrorStateIndex21::kAtt + 2, 0)};
+
+        // 摄动后的姿态矩阵
+        const Euler nom_euler{nav_state.pvacur_.euler[0], nav_state.pvacur_.euler[1], nav_state.pvacur_.euler[2]};
+        const Mat3 c_ins = quat2dcm(euler2quat(nom_euler));
+        Mat3 i_plus_phi_cross = identity3();
+        i_plus_phi_cross.m[0][1] = -dphi.z; i_plus_phi_cross.m[0][2] = dphi.y;
+        i_plus_phi_cross.m[1][0] = dphi.z;  i_plus_phi_cross.m[1][2] = -dphi.x;
+        i_plus_phi_cross.m[2][0] = -dphi.y; i_plus_phi_cross.m[2][1] = dphi.x;
+        const Mat3 c_nb = matMul(i_plus_phi_cross, c_ins);
+
+        // 摄动后的天线位置
+        const LocalPosition pos_cur{nav_state.pvacur_.blh[0], nav_state.pvacur_.blh[1], nav_state.pvacur_.blh[2]};
+        const LocalVelocity vel_cur{nav_state.pvacur_.vel_n[0], nav_state.pvacur_.vel_n[1], nav_state.pvacur_.vel_n[2]};
+        const EarthParameters earth = updateEarthParameters(pos_cur, vel_cur);
+        const double cos_lat = std::cos(nav_state.pvacur_.blh[0]);
+        const double safe_cos_lat = (std::fabs(cos_lat) < 1e-8) ? ((cos_lat >= 0.0) ? 1e-8 : -1e-8) : cos_lat;
+
+        const Blh imu_blh = {
+            nav_state.pvacur_.blh[0] - d_n / (earth.rm + nav_state.pvacur_.blh[2]),
+            nav_state.pvacur_.blh[1] - d_e / ((earth.rn + nav_state.pvacur_.blh[2]) * safe_cos_lat),
+            nav_state.pvacur_.blh[2] + d_d
+        };
+
         const Vec3 lever_b{antenna_lever_arm_b[0], antenna_lever_arm_b[1], antenna_lever_arm_b[2]};
         const Vec3 lever_n = matVec(c_nb, lever_b);
         const Blh pert_ant_blh = local2global(lever_n, imu_blh);
@@ -338,8 +366,6 @@ inline void gnssPositionUpdateAndFeedback21(
     const Matrix x_fb = kf.state();
     feedbackInsClosedLoopFrom21State(x_fb, nav_state);
     if (reset_state_after_feedback) {
-        const Matrix j_reset = buildResetJacobianFrom21StateError(x_fb);
-        kf.applyCovarianceResetJacobian(j_reset);
         kf.zeroStateSubrange(0, ErrorStateIndex21::kDim);
     }
 }
