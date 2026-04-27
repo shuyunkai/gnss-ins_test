@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <string>
 #include <array>
@@ -57,8 +57,8 @@ struct InitialParameterConfig {
         std::array<double, 3> init_accel_scale = {1651.17392773, 614.16423055, 788.58869356};    // ppm
         // --------------------- 初始卡尔曼滤波初始误差置信度(P0) ---------------------
         std::array<double, 3> pos_std = {0.008, 0.010, 0.035};            // 位置初始标准差 (m) - 采用RTK测量数据
-        std::array<double, 3> vel_std = {0.001, 0.001, 0.001};            // 速度初始标准差 (m/s) - 参考真值
-        std::array<double, 3> att_std = {0.001, 0.001, 0.001};            // 姿态角初始标准差 (deg) - 参考真值
+        std::array<double, 3> vel_std = {0.01, 0.01, 0.01};            // 速度初始标准差 (m/s) - 参考真值
+        std::array<double, 3> att_std = {0.01, 0.01, 0.01};            // 姿态角初始标准差 (deg) - 参考真值
 
 	// --------------------- 初始零偏与比例因子置信度 ---------------------
 	std::array<double, 3> gyro_bias_std = {5, 5, 5};               // deg/h
@@ -82,7 +82,7 @@ enum class FilterAlgorithm {
 
 // 作用：定义 MainProgramConfig 数据结构 (全局运行相关配置)
 struct MainProgramConfig {
-	FilterAlgorithm algorithm = FilterAlgorithm::UnscentedKalman; // 算法选择，默认设定为扩展卡尔曼滤波 EKF
+	FilterAlgorithm algorithm = FilterAlgorithm::ExtendedKalman; // 算法选择，默认设定为扩展卡尔曼滤波 EKF
 
 	std::string imu_file_path = "data_ICM20602/ICM20602.txt";   // 输入的 IMU 二进制/文本路径
 	std::string gnss_file_path = "data_ICM20602/GNSS_RTK.txt";  // 输入的 GNSS 测量信息

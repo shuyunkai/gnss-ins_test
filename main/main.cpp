@@ -15,6 +15,7 @@
 #include "is_update.h"
 #include "config.h"
 namespace ins {
+// 归一化GNSS经纬度为弧度单位
 inline void normalizeGnssAngleToRadIfNeeded(GnssData& gnss) {
 	const double kRadMax = 3.2;
 	if (std::fabs(gnss.latitude) > kRadMax || std::fabs(gnss.longitude) > kRadMax) {
@@ -22,16 +23,19 @@ inline void normalizeGnssAngleToRadIfNeeded(GnssData& gnss) {
 		gnss.longitude = deg2rad(gnss.longitude);
 	}
 }
+// 检查文件是否存在的快捷函数
 inline bool fileExists(const std::string& file_path) {
 		std::ifstream ifs(file_path, std::ios::binary);
 	return ifs.good();
 }
+// 尝试解析并验证IMU文件路径
 inline std::string resolveImuFilePath(const MainProgramConfig& cfg) {
 	if (!cfg.imu_file_path.empty() && fileExists(cfg.imu_file_path)) {
 		return cfg.imu_file_path;
 	}
 	throw std::runtime_error("Cannot resolve IMU file path");
 }
+// 快速遍历读取文件行数
 inline std::size_t countTextLinesFast(const std::string& file_path) {
 		std::ifstream ifs(file_path);
 	if (!ifs.is_open()) {
@@ -46,6 +50,8 @@ inline std::size_t countTextLinesFast(const std::string& file_path) {
 	}
 	return lines;
 }
+// 估算IMU记录的条数以初始化进度条
+// 快速试探性地跳步评估IMU数据实体的行数以准备后续控制台进度条的渲染
 inline std::size_t estimateImuRecordCount(const std::string& imu_file_path) {
 	ImuFileLoader loader;
 	if (!loader.open(imu_file_path)) {
@@ -64,10 +70,12 @@ inline std::size_t estimateImuRecordCount(const std::string& imu_file_path) {
 	}
 		return countTextLinesFast(imu_file_path);
 }
+// 计算一阶马尔可夫过程的状态转移系数
 inline double calcMarkovPhi(double dt, double tau) {
 	const double tau_safe = (tau > 1e-6) ? tau : 1e-6;
 	return std::exp(-dt / tau_safe);
 }
+// 生成3D向量的反对称矩阵
 inline Matrix skewMatrix(const Vec3& v) {
 		Matrix s(3, 3, 0.0);
 	s(0, 1) = -v.z;
@@ -78,6 +86,7 @@ inline Matrix skewMatrix(const Vec3& v) {
 	s(2, 1) = v.x;
 	return s;
 }
+// 转换内建的Mat3格式为通用Matrix
 inline Matrix mat3ToMatrix(const Mat3& m) {
 		Matrix out(3, 3, 0.0);
 	for (std::size_t r = 0; r < 3; ++r) {
@@ -87,6 +96,7 @@ inline Matrix mat3ToMatrix(const Mat3& m) {
 	}
 	return out;
 }
+// 由3D向量构建对角矩阵
 inline Matrix diagFromVec3(const Vec3& v) {
 		Matrix d(3, 3, 0.0);
 	d(0, 0) = v.x;
@@ -94,6 +104,7 @@ inline Matrix diagFromVec3(const Vec3& v) {
 	d(2, 2) = v.z;
 	return d;
 }
+// 将3x3的矩阵块叠加到大矩阵中
 inline void addBlock3x3(Matrix& dst,
 						std::size_t row0,
 						std::size_t col0,
@@ -105,6 +116,8 @@ inline void addBlock3x3(Matrix& dst,
 		}
 	}
 }
+// 基于当前状态和运动推演计算误差状态转移雅可比矩阵 F
+// 计算连续时间下误差状态方程的雅可比矩阵 F。这个F阵涵盖了基于物理规律的INS机械编排微小误差推演
 inline Matrix buildAlignedTransitionF(double dt,
 								const NavigationStatusData& nav_state,
 								const ImuMeasureData& imu_measure,
@@ -117,7 +130,7 @@ inline Matrix buildAlignedTransitionF(double dt,
 	const double tab_safe = (t_ab > 1e-6) ? t_ab : 1e-6;
 	const double tgs_safe = (t_gs > 1e-6) ? t_gs : 1e-6;
 	const double tas_safe = (t_as > 1e-6) ? t_as : 1e-6;
-	// ����Issue 1��ʹ��pvapre_������pvacur_���������Ի�
+	// Issue 1pvapre_pvacur_
 	const PvaData& pva = nav_state.pvapre_;
 	const Blh blh{pva.blh[0], pva.blh[1], pva.blh[2]};
 	const Vec3 vel_n{pva.vel_n[0], pva.vel_n[1], pva.vel_n[2]};
@@ -205,7 +218,7 @@ inline Matrix buildAlignedTransitionF(double dt,
 	fc(ErrorStateIndex21::kAtt + 0, ErrorStateIndex21::kPos + 2) = v_e / (rn_h * rn_h);
 	fc(ErrorStateIndex21::kAtt + 1, ErrorStateIndex21::kPos + 2) = -v_n / (rm_h * rm_h);
 	fc(ErrorStateIndex21::kAtt + 2, ErrorStateIndex21::kPos + 0) =
-		omega_e * safe_cos_lat / rm_h - v_e * sec2_lat / (rm_h * rn_h);
+		-omega_e * safe_cos_lat / rm_h - v_e * sec2_lat / (rm_h * rn_h);
 	fc(ErrorStateIndex21::kAtt + 2, ErrorStateIndex21::kPos + 2) =
 		-v_e * tan_lat / (rn_h * rn_h);
 	// F_phiphi, F_phiv, F_phibg, F_phisg
@@ -251,9 +264,10 @@ inline Matrix buildAlignedTransitionF(double dt,
 	}
 	return f;
 }
+// 基于IMU物理参数计算离散化后的系统过程噪声自协方差矩阵 Q
+// 将连续的系统白噪声转换为跨时间步 dt 的离散系统激励噪声协方差矩阵 Q，以反映传感器的随机游走配置
 inline Matrix buildAlignedProcessNoiseQ(double dt,
 												const Matrix& f,
-												const ImuMeasureData& imu_measure,
 												const NavigationStatusData& nav_state,
 									const InitialParameterConfig& init_cfg,
 									double t_gb,
@@ -284,7 +298,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 		q_c(12 + i, 12 + i) = 2.0 * sigma_gs * sigma_gs / tgs_safe;
 		q_c(15 + i, 15 + i) = 2.0 * sigma_as * sigma_as / tas_safe;
 	}
-	// ����Issue 3��G(tk-1)ʹ��k-1ʱ����̬��G(tk)ʹ��kʱ����̬
+	// Issue 3G(tk-1)k-1G(tk)k
 	const PvaData& pva_km1 = nav_state.pvapre_;
 	const Euler e_km1{pva_km1.euler[0], pva_km1.euler[1], pva_km1.euler[2]};
 	const Mat3 c_nb_km1_m3 = quat2dcm(euler2quat(e_km1));
@@ -295,7 +309,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 	const Mat3 c_nb_curr_m3 = quat2dcm(euler2quat(e_curr));
 	const Matrix c_nb_curr = mat3ToMatrix(c_nb_curr_m3);
 
-	// g_km1 ʹ�� k-1 ʱ��״̬ (c_nb_km1)
+	// g_km1  k-1  (c_nb_km1)
 	Matrix g_km1(ErrorStateIndex21::kDim, 18, 0.0);
 	addBlock3x3(g_km1, ErrorStateIndex21::kVel, 0, c_nb_km1, 1.0);
 	addBlock3x3(g_km1, ErrorStateIndex21::kAtt, 3, c_nb_km1, 1.0);
@@ -304,7 +318,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 	addBlock3x3(g_km1, ErrorStateIndex21::kGyroScale, 12, Matrix::identity(3), 1.0);
 	addBlock3x3(g_km1, ErrorStateIndex21::kAccelScale, 15, Matrix::identity(3), 1.0);
 
-	// g_k ʹ�� k ʱ��״̬ (c_nb_curr)
+	// g_k  k  (c_nb_curr)
 	Matrix g_k(ErrorStateIndex21::kDim, 18, 0.0);
 	addBlock3x3(g_k, ErrorStateIndex21::kVel, 0, c_nb_curr, 1.0);
 	addBlock3x3(g_k, ErrorStateIndex21::kAtt, 3, c_nb_curr, 1.0);
@@ -330,6 +344,7 @@ inline Matrix buildAlignedProcessNoiseQ(double dt,
 	}
 	return q_d;
 }
+// 构建系统初始P0协方差矩阵
 inline Matrix buildInitialCovarianceP0(const InitialParameterConfig& init_cfg) {
 		Matrix p0(ErrorStateIndex21::kDim, ErrorStateIndex21::kDim, 0.0);
 	for (std::size_t i = 0; i < 3; ++i) {
@@ -354,6 +369,7 @@ inline Matrix buildInitialCovarianceP0(const InitialParameterConfig& init_cfg) {
 	}
 	return p0;
 }
+// 根据配置文件和初始GNSS(如果有)生成初始导航系统状态
 inline NavigationStatusData buildInitialNavigationStatus(
 		const InitialParameterConfig& init_cfg,
 		bool has_first_gnss,
@@ -386,6 +402,7 @@ inline NavigationStatusData buildInitialNavigationStatus(
 	}
 	return nav_init;
 }
+// 从巨大的协方差P矩阵中提取出对应分量的标准差(STD)
 inline std::array<double, 3> extractStd(const Matrix& p, std::size_t start_idx) {
 	std::array<double, 3> out{0.0, 0.0, 0.0};
 	for (std::size_t i = 0; i < 3; ++i) {
@@ -394,6 +411,7 @@ inline std::array<double, 3> extractStd(const Matrix& p, std::size_t start_idx) 
 	}
 	return out;
 }
+// 在终端打印处理进度条
 inline void printProgressBar(std::size_t processed, std::size_t total, std::size_t width) {
 	if (width == 0) {
 		width = 40;
@@ -416,6 +434,8 @@ inline void printProgressBar(std::size_t processed, std::size_t total, std::size
 	std::cout << "] " << std::fixed << std::setprecision(1) << (ratio * 100.0)
 			  << "% (" << processed << "/" << total << ")" << std::flush;
 }
+// 核心代码入口：运行基于配置文件的组合导航主循环解算
+// 核心主循环函数：执行文件I/O加载、初始化导航状态，并逐步读取IMU和GNSS数据触发卡尔曼滤波器的predict和update
 inline int RunGnssInsMain(const MainProgramConfig& cfg = MainProgramConfig()) {
 	const std::string imu_file_path = resolveImuFilePath(cfg);
 	ImuFileLoader imu_loader;
@@ -479,45 +499,37 @@ inline int RunGnssInsMain(const MainProgramConfig& cfg = MainProgramConfig()) {
 			if (step_dt < 1e-6) {
 				step_dt = 1e-6;
 			}
-			
-			// 1. ��ȡk-1ʱ��״̬������ǰ��״̬��
+                        // 1. 获取k-1时刻的状态
 			const NavigationStatusData nav_km1 = workflow.navState();
-
-			// 2. ʹ��k-1ʱ��״̬����F�������״̬����������켣�������Ի���
+                        // 2. 使用k-1时刻状态构建雅可比矩阵 F
 			const Matrix f = buildAlignedTransitionF(
 				step_dt,
-				nav_km1,  // ʹ��k-1ʱ��״̬
+				nav_km1,  // k-1
 				step_imu,
 				cfg.corrtime_gb,
 				cfg.corrtime_ab,
 				cfg.corrtime_gs,
 				cfg.corrtime_as);
-
-			// 3. ׼����������k-1ʱ�̵ĵ�ǰ״̬��Ϊ��������ʼ״̬�����µ�pvapre_��
+                        // 3. 准备进行INS传播
 			NavigationStatusData nav_after_mech = nav_km1;
-			nav_after_mech.pvapre_ = nav_km1.pvacur_; // ������propagateInsʹ��pvapre_��Ϊ��ʼ�㣬������Ϊk-1
-
-			// 4. ִ��INS��е���ţ��ٶ�/λ��/��̬����������ȡkʱ��״̬
+			nav_after_mech.pvapre_ = nav_km1.pvacur_; // propagateInspvapre_k-1
+                        // 4. 执行INS机械编排
 			propagateIns(step_imu, nav_after_mech);
-			// ��ʱ nav_after_mech.pvapre_ �� k-1, nav_after_mech.pvacur_ �� k
-
-			// 5. ʹ��kʱ��״̬����Q�������λ�����Ҫk-1��kʱ�̵�G����
-			// nav_after_mech.pvapre_ �� k-1, nav_after_mech.pvacur_ �� k
+			//  nav_after_mech.pvapre_  k-1, nav_after_mech.pvacur_  k
+                        // 5. 构建过程噪声协方差矩阵 Q
+			// nav_after_mech.pvapre_  k-1, nav_after_mech.pvacur_  k
 			const Matrix q = buildAlignedProcessNoiseQ(
 								step_dt,
 								f,
-								step_imu,
-								nav_after_mech,  // ʹ�ð���k-1��kʱ�̵�״̬
+								nav_after_mech,  // k-1k
 				cfg.init,
 				cfg.corrtime_gb,
 				cfg.corrtime_ab,
 				cfg.corrtime_gs,
 				cfg.corrtime_as);
-
-			// 6. ����workflow״̬��ִ��EKF predict + update
+                        // 6. 更新状态，执行 EKF 
 			workflow.setNavState(nav_after_mech);
 			workflow.processStep(
-				step_imu,
 				f,
 				q,
 				has_gnss_step,
@@ -550,21 +562,28 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 				double ratio = (gnss_use.time - imu_pre.time) / (imu_cur.time - imu_pre.time);
 				if (ratio < 0.0) ratio = 0.0;
 				if (ratio > 1.0) ratio = 1.0;
+
+				// 双子样高精度内插 (考虑角速度/比力线性变化)
+				const double c_pre = 0.5 * ratio * (1.0 - ratio);
+				const double c_cur = 0.5 * ratio * (1.0 + ratio);
+
 				ImuData imu_mid = imu_cur;
 				imu_mid.time = gnss_use.time;
-				imu_mid.dtheta_x = imu_cur.dtheta_x * ratio;
-				imu_mid.dtheta_y = imu_cur.dtheta_y * ratio;
-				imu_mid.dtheta_z = imu_cur.dtheta_z * ratio;
-				imu_mid.dvel_x   = imu_cur.dvel_x * ratio;
-				imu_mid.dvel_y   = imu_cur.dvel_y * ratio;
-				imu_mid.dvel_z   = imu_cur.dvel_z * ratio;
+				imu_mid.dtheta_x = c_pre * imu_pre.dtheta_x + c_cur * imu_cur.dtheta_x;
+				imu_mid.dtheta_y = c_pre * imu_pre.dtheta_y + c_cur * imu_cur.dtheta_y;
+				imu_mid.dtheta_z = c_pre * imu_pre.dtheta_z + c_cur * imu_cur.dtheta_z;
+				imu_mid.dvel_x   = c_pre * imu_pre.dvel_x + c_cur * imu_cur.dvel_x;
+				imu_mid.dvel_y   = c_pre * imu_pre.dvel_y + c_cur * imu_cur.dvel_y;
+				imu_mid.dvel_z   = c_pre * imu_pre.dvel_z + c_cur * imu_cur.dvel_z;
+
 				ImuData imu_cur_rem = imu_cur;
-				imu_cur_rem.dtheta_x = imu_cur.dtheta_x * (1.0 - ratio);
-				imu_cur_rem.dtheta_y = imu_cur.dtheta_y * (1.0 - ratio);
-				imu_cur_rem.dtheta_z = imu_cur.dtheta_z * (1.0 - ratio);
-				imu_cur_rem.dvel_x   = imu_cur.dvel_x * (1.0 - ratio);
-				imu_cur_rem.dvel_y   = imu_cur.dvel_y * (1.0 - ratio);
-				imu_cur_rem.dvel_z   = imu_cur.dvel_z * (1.0 - ratio);
+				imu_cur_rem.dtheta_x = imu_cur.dtheta_x - imu_mid.dtheta_x;
+				imu_cur_rem.dtheta_y = imu_cur.dtheta_y - imu_mid.dtheta_y;
+				imu_cur_rem.dtheta_z = imu_cur.dtheta_z - imu_mid.dtheta_z;
+				imu_cur_rem.dvel_x   = imu_cur.dvel_x - imu_mid.dvel_x;
+				imu_cur_rem.dvel_y   = imu_cur.dvel_y - imu_mid.dvel_y;
+				imu_cur_rem.dvel_z   = imu_cur.dvel_z - imu_mid.dvel_z;
+
 				ImuMeasureData step1_imu;
 				step1_imu.imupre_ = imu_pre;
 				step1_imu.imucur_ = imu_mid;
@@ -597,8 +616,6 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 		if (!saver.writeStateStdLine(imu_cur.time, pos_std, vel_std, att_std, gb_std, ab_std, gs_std, as_std)) {
 			throw std::runtime_error("Failed to write STD result");
 		}
-		
-		// ���Э����Խ���Ԫ���Ƿ�Ϊ��
 		auto checkCov = [&p]() {
 			for (int i = 0; i < p.rows(); ++i) {
 				if (p(i, i) < 0.0) {
@@ -615,7 +632,7 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 			printProgressBar(processed, total_records, cfg.progress_bar_width);
 		}
 		
-		// ������һʱ�̵�״̬�� IMU ����
+		//  IMU 
 		imu_pre = imu_cur;
 		if (!imu_loader.readNext(imu_cur)) {
 			break;
@@ -647,6 +664,7 @@ if (cfg.algorithm == FilterAlgorithm::ExtendedKalman) {
 
 return 0;
 }
+// 打印命令行参数使用说明
 inline void printMainUsage(const char* exe_name) {
 	std::cout << "Usage: " << exe_name
 			  << " [--imu <imu_file>] [--gnss <gnss_file>] [--out <output_dir>]"
@@ -656,6 +674,7 @@ inline void printMainUsage(const char* exe_name) {
 			  << " [--start <imu_time>] [--end <imu_time|-1>] [--help]"
 			  << std::endl;
 }
+// 从命令行参数解析生成程序的配置信息
 inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 	MainProgramConfig cfg;
 	for (int i = 1; i < argc; ++i) {
@@ -705,6 +724,7 @@ inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 }
 }  // namespace ins
 
+// 程序的入口点：负责解析命令行参数、加载相关配置文件，并启动核心的GNSS/INS组合导航算法求解框架
 int main(int argc, char** argv) {
 	try {
 		const ins::MainProgramConfig cfg = ins::ParseMainConfigFromArgs(argc, argv);
@@ -718,5 +738,7 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 }
+
+
 
 

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "imu.h"
+#include "../common/Coordinate_2.h"
 
 namespace ins {
 
@@ -171,9 +172,6 @@ public:
 	}
 
 private:
-		static double rad2deg(double rad) {
-		return rad * 180.0 / 3.14159265358979323846;
-	}
 
 		static double radps2degh(double radps) {
 				return rad2deg(radps) * 3600.0;

@@ -1,10 +1,10 @@
-﻿#pragma once
+#pragma once
 
 #include <cmath>
 
 namespace fusion {
 
-// 作用：定义“同一时刻”判定阈值（秒）。
+// 作用：定义同一时刻判定阈值（秒）。
 constexpr double kDefaultTimeEqualThreshold = 1e-3;
 
 // 作用：描述两个时刻的前后关系。

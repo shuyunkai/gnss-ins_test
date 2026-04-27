@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <cmath>
 #include "../common/Coordinate_2.h"
 #include "../common/erathupdate.h"
@@ -296,4 +296,4 @@ inline void propagateIns(
 	eulerToPvaEuler(quat2euler(q_nb_cur), pva_cur);
 	nav_state.pvacur_ = pva_cur;
 }
-}  // 鍛藉悕绌洪棿缁撴潫
+}  // namespace ins

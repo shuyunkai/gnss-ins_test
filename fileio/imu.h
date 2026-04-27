@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <array>
 #include <cmath>
@@ -44,20 +44,14 @@ struct PvaData {
 };
 
 struct ImuErrorData {
-		std::array<double, 3> gyro_bias = {0.0, 0.0, 0.0};
+	std::array<double, 3> gyro_bias = {0.0, 0.0, 0.0};
 	std::array<double, 3> accel_bias = {0.0, 0.0, 0.0};
 
-			std::array<double, 3> gyro_random_walk = {0.0, 0.0, 0.0};
+	std::array<double, 3> gyro_random_walk = {0.0, 0.0, 0.0};
 	std::array<double, 3> accel_random_walk = {0.0, 0.0, 0.0};
 
-		std::array<double, 3> gyro_bias_instability = {0.0, 0.0, 0.0};
-	std::array<double, 3> accel_bias_instability = {0.0, 0.0, 0.0};
-
-		std::array<double, 3> gyro_scale = {0.0, 0.0, 0.0};
+	std::array<double, 3> gyro_scale = {0.0, 0.0, 0.0};
 	std::array<double, 3> accel_scale = {0.0, 0.0, 0.0};
-
-		std::array<double, 3> gyro_scale_instability = {0.0, 0.0, 0.0};
-	std::array<double, 3> accel_scale_instability = {0.0, 0.0, 0.0};
 };
 
 struct NavigationStatusData {

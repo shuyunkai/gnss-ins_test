@@ -5,7 +5,7 @@ echo =========================================
 
 cd /d "%~dp0"
 
-cl.exe /O2 /EHsc /std:c++14 .\main\main.cpp /Fegnss_ins.exe
+cl.exe /W4 /O2 /EHsc /std:c++14 .\main\main.cpp /Fegnss_ins.exe
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

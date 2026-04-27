@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <array>
 #include <stdexcept>
 #include "../common/Coordinate_2.h"
@@ -79,7 +79,7 @@ public:
     }
         // 注意: 本函数只执行EKF predict/update,不负责INS机械编排
     // INS传播应由调用方在调用本函数前完成
-    void processStep(const ImuMeasureData& imu_measure,
+    void processStep(
                      const Matrix& f,
                      const Matrix& q,
                      bool has_gnss,
@@ -87,8 +87,14 @@ public:
                      const std::array<double, 3>& antenna_lever_arm_b = {0.0, 0.0, 0.0}) {
         ensureInitialized();
         // 移除重复的propagateIns调用,避免状态被传播两次
-        // propagateIns(imu_measure, nav_state_);  // ← 已删除,由main.cpp统一控制
-        this->doPredict(imu_measure, f, q);
+        // propagateIns(imu_measure, nav_state_);  //  已删除,由main.cpp统一控制
+        
+        // C++17 'if constexpr' avoids SFINAE need for template method calls.
+        if constexpr (std::is_same<FilterType, UnscentedKalmanFilter>::value) {
+            this->doPredict(q);
+        } else {
+            this->doPredict(f, q);
+        }
         if (!has_gnss) {
             nav_state_.pvapre_ = nav_state_.pvacur_;
             return;
@@ -144,25 +150,14 @@ public:
     // ====== SFINAE Dispatch for predict ======
     template <typename T = FilterType>
     typename std::enable_if<!std::is_same<T, UnscentedKalmanFilter>::value>::type
-    doPredict(const ImuMeasureData& imu_measure, const Matrix& f, const Matrix& q) {
+    doPredict(const Matrix& f, const Matrix& q) {
         kf_.predict(f, q);
     }
 
     template <typename T = FilterType>
     typename std::enable_if<std::is_same<T, UnscentedKalmanFilter>::value>::type
-    doPredict(const ImuMeasureData& imu_measure, const Matrix& f, const Matrix& q) {
-        auto f_func = [&](const Matrix& chi_i) {
-            NavigationStatusData temp_nav = nav_state_; // nav_state_ here has pvapre_ = x_{k-1}, pvacur_ = x_{k}
-            temp_nav.pvacur_ = temp_nav.pvapre_; 
-            
-            feedbackInsClosedLoopFrom21State(chi_i, temp_nav);
-            temp_nav.pvapre_ = temp_nav.pvacur_; 
-            
-            propagateIns(imu_measure, temp_nav);
-            
-            return extractErrorStateFrom21State(nav_state_, temp_nav); // nav_state_ is the unperturbed nominal
-        };
-        kf_.predict(f_func, q);
+    doPredict(const Matrix& q) {
+        kf_.predict(Matrix(), q);
     }
 
 private:

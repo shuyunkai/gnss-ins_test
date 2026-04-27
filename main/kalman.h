@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <cmath>
 #include <cstddef>
 #include <algorithm>
@@ -686,8 +686,6 @@ inline void gnssPositionUpdateAndFeedback21(
 	const Matrix x_fb = kf.state();
 	feedbackInsClosedLoopFrom21State(x_fb, nav_state);
 	if (reset_state_after_feedback) {
-		const Matrix j_reset = buildResetJacobianFrom21StateError(x_fb);
-		kf.applyCovarianceResetJacobian(j_reset);
 		kf.zeroStateSubrange(0, ErrorStateIndex21::kDim);
 	}
 	if (!kf.isCovarianceValid()) {
@@ -697,11 +695,7 @@ inline void gnssPositionUpdateAndFeedback21(
 inline void gnssPositionVelocityUpdateAndFeedback21(
 		ExtendedKalmanFilter& kf,
 		const Matrix& residual_z,
-		const Matrix& r,
-		NavigationStatusData& nav_state,
-		const std::array<double, 3>& antenna_lever_arm_b = {0.0, 0.0, 0.0},
-		const Vec3& omega_ib_b_est = Vec3{0.0, 0.0, 0.0},
-		bool reset_state_after_feedback = true) {
+		const Matrix& r) {
 	if (kf.stateDim() != ErrorStateIndex21::kDim) {
 		throw std::invalid_argument("gnssPositionVelocityUpdateAndFeedback21: KF must be 21-dim");
 	}
@@ -719,4 +713,4 @@ inline void gnssPositionVelocityUpdateAndFeedback21(
 	}
 	throw std::runtime_error("gnssPositionVelocityUpdateAndFeedback21: function removed, GNSS signal has no velocity");
 }
-}  // 锟秸硷拷锟
+}  // namespace ins
