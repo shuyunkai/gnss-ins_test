@@ -231,26 +231,8 @@ inline Quaternion rotvec2quat(const Vec3& rv) {
 		return normalizeQuaternion(q);
 }
 
-inline Vec3 quat2rotvec(const Quaternion& q_in) {
-	const Quaternion q = normalizeQuaternion(q_in);
-	const double sin_half = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z);
 
-	if (sin_half < 1e-12) {
-		return Vec3{2.0 * q.x, 2.0 * q.y, 2.0 * q.z};
-	}
 
-	const double half_angle = std::atan2(sin_half, q.w);
-	const double scale = 2.0 * half_angle / sin_half;
-	return Vec3{q.x * scale, q.y * scale, q.z * scale};
-}
-
-inline Mat3 rotvec2dcm(const Vec3& rv) {
-		return quat2dcm(rotvec2quat(rv));
-}
-
-inline Vec3 dcm2rotvec(const Mat3& c) {
-		return quat2rotvec(dcm2quat(c));
-}
 
 inline Mat3 cne(const Blh& blh) {
 	const double slat = std::sin(blh.lat);

@@ -286,25 +286,6 @@ public:
 		const Matrix& covariance() const {
 		return p_;
 	}
-		const Matrix& kalmanGain() const {
-		return k_;
-	}
-		const Matrix& innovation() const {
-		return y_;
-	}
-		const Matrix& innovationCovariance() const {
-		return s_;
-	}
-		double lastInnovationNis() const {
-		return last_innovation_nis_;
-	}
-		bool lastUpdateAccepted() const {
-		return last_update_accepted_;
-	}
-		void setInnovationTest(bool enabled, double gate_threshold) {
-		innovation_test_enabled_ = enabled;
-		innovation_gate_threshold_ = (gate_threshold > 0.0) ? gate_threshold : innovation_gate_threshold_;
-	}
 		std::size_t stateDim() const {
 		return x_.rows();
 	}
@@ -372,36 +353,7 @@ public:
 		}
 	}
 	// 作用：状态更新与预测 (Predict)
-	void predict(const Matrix& f, const Matrix& q, const Matrix& b, const Matrix& u) {
-		predict(f, q, Matrix::identity(x_.rows()), b, u);
-	}
 	// 作用：状态更新与预测 (Predict)
-	void predict(const Matrix& f,
-					 const Matrix& q,
-					 const Matrix& gamma,
-					 const Matrix& b,
-					 const Matrix& u) {
-		ensureInitialized();
-		if (f.rows() != x_.rows() || f.cols() != x_.rows()) {
-			throw std::invalid_argument("predict(control): F dimension mismatch");
-		}
-		if (b.rows() != x_.rows() || b.cols() != u.rows() || u.cols() != 1) {
-			throw std::invalid_argument("predict(control): B/U dimension mismatch");
-		}
-		if (q.rows() != x_.rows() || q.cols() != x_.rows()) {
-			throw std::invalid_argument("predict(control): Q dimension mismatch");
-		}
-		if (gamma.rows() != x_.rows() || gamma.cols() != x_.rows()) {
-			throw std::invalid_argument("predict(control): Gamma dimension mismatch");
-		}
-		x_ = add(mul(f, x_), mul(b, u));
-		const Matrix q_mapped = mul(mul(gamma, q), transpose(gamma));
-		p_ = add(mul(mul(f, p_), transpose(f)), q_mapped);
-		p_ = symmetrizeMatrix(p_);
-		if (!isCovarianceValid()) {
-			regularizeCovariance();
-		}
-	}
 	// 作用：量测更新 (Update)
 	void update(const Matrix& z, const Matrix& h, const Matrix& r) {
 		ensureInitialized();
@@ -428,7 +380,6 @@ public:
 		y_ = sub(z, mul(h, x_));
 		s_ = symmetrizeMatrix(add(mul(mul(h, p_), ht), r_sym));
 		const Matrix s_inv = inverseWithJitter(s_);
-		last_innovation_nis_ = 0.0;
 		k_ = mul(mul(p_, ht), s_inv);
 		
 		x_ = add(x_, mul(k_, y_));
@@ -440,7 +391,6 @@ public:
 		if (!isCovarianceValid()) {
 			regularizeCovariance();
 		}
-		last_update_accepted_ = true;
 	}
 		void zeroStateSubrange(std::size_t start_row, std::size_t count) {
 		ensureInitialized();
@@ -449,17 +399,6 @@ public:
 		}
 		for (std::size_t i = 0; i < count; ++i) {
 			x_(start_row + i, 0) = 0.0;
-		}
-	}
-		void applyCovarianceResetJacobian(const Matrix& j) {
-		ensureInitialized();
-		if (j.rows() != x_.rows() || j.cols() != x_.rows()) {
-			throw std::invalid_argument("applyCovarianceResetJacobian: J dimension mismatch");
-		}
-		p_ = mul(mul(j, p_), transpose(j));
-		p_ = symmetrizeMatrix(p_);
-		if (!isCovarianceValid()) {
-			regularizeCovariance();
 		}
 	}
 private:
@@ -475,10 +414,6 @@ private:
 	Matrix k_;
 	Matrix y_;
 	Matrix s_;
-	bool innovation_test_enabled_ = false;
-	double innovation_gate_threshold_ = 11.344866730144373;  // chi2(3, 0.99)
-	double last_innovation_nis_ = 0.0;
-	bool last_update_accepted_ = true;
 };
 struct ErrorStateIndex21 {
 	static constexpr std::size_t kPos = 0;
@@ -533,46 +468,6 @@ inline Matrix buildPositionMeasurementNoiseFromGnssStd(
 	r(1, 1) = s_e * s_e;
 	r(2, 2) = s_d * s_d;
 	return r;
-}
-inline Matrix buildPositionVelocityMeasurementNoiseFromGnssStd(
-		double std_n,
-		double std_e,
-		double std_d,
-		double std_vn,
-		double std_ve,
-		double std_vd,
-		double min_pos_std = 1e-4,
-		double min_vel_std = 0.05) {
-	const double s_n = std::max(std::fabs(std_n), min_pos_std);
-	const double s_e = std::max(std::fabs(std_e), min_pos_std);
-	const double s_d = std::max(std::fabs(std_d), min_pos_std);
-	const double s_vn = std::max(std::fabs(std_vn), min_vel_std);
-	const double s_ve = std::max(std::fabs(std_ve), min_vel_std);
-	const double s_vd = std::max(std::fabs(std_vd), min_vel_std);
-		Matrix r(6, 6, 0.0);
-	r(0, 0) = s_n * s_n;
-	r(1, 1) = s_e * s_e;
-	r(2, 2) = s_d * s_d;
-	r(3, 3) = s_vn * s_vn;
-	r(4, 4) = s_ve * s_ve;
-	r(5, 5) = s_vd * s_vd;
-	return r;
-}
-inline Matrix buildResetJacobianFrom21StateError(const Matrix& x_err) {
-        if (x_err.rows() < ErrorStateIndex21::kDim || x_err.cols() != 1) {
-                throw std::invalid_argument("buildResetJacobianFrom21StateError: x_err dimension mismatch");
-        }
-        Matrix j = Matrix::identity(ErrorStateIndex21::kDim);
-        const double phi_n = x_err(ErrorStateIndex21::kAtt + 0, 0);
-        const double phi_e = x_err(ErrorStateIndex21::kAtt + 1, 0);
-        const double phi_d = x_err(ErrorStateIndex21::kAtt + 2, 0);
-        j(ErrorStateIndex21::kAtt + 0, ErrorStateIndex21::kAtt + 1) = phi_d;
-        j(ErrorStateIndex21::kAtt + 0, ErrorStateIndex21::kAtt + 2) = -phi_e;
-        j(ErrorStateIndex21::kAtt + 1, ErrorStateIndex21::kAtt + 0) = -phi_d;
-        j(ErrorStateIndex21::kAtt + 1, ErrorStateIndex21::kAtt + 2) = phi_n;
-        j(ErrorStateIndex21::kAtt + 2, ErrorStateIndex21::kAtt + 0) = phi_e;
-        j(ErrorStateIndex21::kAtt + 2, ErrorStateIndex21::kAtt + 1) = -phi_n;
-        return j;
 }
 inline void feedbackInsClosedLoopFrom21State(
 		const Matrix& x_err,
@@ -691,26 +586,5 @@ inline void gnssPositionUpdateAndFeedback21(
 	if (!kf.isCovarianceValid()) {
 		throw std::runtime_error("gnssPositionUpdateAndFeedback21: posterior P is invalid");
 	}
-}
-inline void gnssPositionVelocityUpdateAndFeedback21(
-		ExtendedKalmanFilter& kf,
-		const Matrix& residual_z,
-		const Matrix& r) {
-	if (kf.stateDim() != ErrorStateIndex21::kDim) {
-		throw std::invalid_argument("gnssPositionVelocityUpdateAndFeedback21: KF must be 21-dim");
-	}
-	if (residual_z.rows() != 6 || residual_z.cols() != 1) {
-		throw std::invalid_argument("gnssPositionVelocityUpdateAndFeedback21: residual_z must be 6x1");
-	}
-	if (r.rows() != 6 || r.cols() != 6) {
-		throw std::invalid_argument("gnssPositionVelocityUpdateAndFeedback21: R must be 6x6");
-	}
-	if (!isFiniteMatrix(r) || !isPositiveDefiniteMatrix(symmetrizeMatrix(r))) {
-		throw std::invalid_argument("gnssPositionVelocityUpdateAndFeedback21: R must be finite and positive definite");
-	}
-	if (!kf.isCovarianceValid()) {
-		throw std::runtime_error("gnssPositionVelocityUpdateAndFeedback21: prior P is invalid");
-	}
-	throw std::runtime_error("gnssPositionVelocityUpdateAndFeedback21: function removed, GNSS signal has no velocity");
 }
 }  // namespace ins

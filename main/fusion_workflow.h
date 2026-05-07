@@ -18,51 +18,20 @@ inline Mat3 transpose3(const Mat3& a) {
     return b;
 }
 
-inline Matrix extractErrorStateFrom21State(const NavigationStatusData& nominal, const NavigationStatusData& perturbed) {
-    Matrix err(21, 1, 0.0);
-    const LocalPosition pos_nom{nominal.pvacur_.blh[0], nominal.pvacur_.blh[1], nominal.pvacur_.blh[2]};
-    const LocalVelocity vel_nom{nominal.pvacur_.vel_n[0], nominal.pvacur_.vel_n[1], nominal.pvacur_.vel_n[2]};
-    const EarthParameters earth = updateEarthParameters(pos_nom, vel_nom);
-    const double cos_lat = std::cos(nominal.pvacur_.blh[0]);
-    const double safe_cos_lat = (std::fabs(cos_lat) < 1e-8) ? ((cos_lat >= 0.0) ? 1e-8 : -1e-8) : cos_lat;
-
-    err(ErrorStateIndex21::kPos + 0, 0) = (nominal.pvacur_.blh[0] - perturbed.pvacur_.blh[0]) * (earth.rm + nominal.pvacur_.blh[2]);
-    err(ErrorStateIndex21::kPos + 1, 0) = (nominal.pvacur_.blh[1] - perturbed.pvacur_.blh[1]) * ((earth.rn + nominal.pvacur_.blh[2]) * safe_cos_lat);
-    err(ErrorStateIndex21::kPos + 2, 0) = perturbed.pvacur_.blh[2] - nominal.pvacur_.blh[2];
-
-    err(ErrorStateIndex21::kVel + 0, 0) = nominal.pvacur_.vel_n[0] - perturbed.pvacur_.vel_n[0];
-    err(ErrorStateIndex21::kVel + 1, 0) = nominal.pvacur_.vel_n[1] - perturbed.pvacur_.vel_n[1];
-    err(ErrorStateIndex21::kVel + 2, 0) = nominal.pvacur_.vel_n[2] - perturbed.pvacur_.vel_n[2];
-
-    Mat3 c_pert = quat2dcm(euler2quat(Euler{perturbed.pvacur_.euler[0], perturbed.pvacur_.euler[1], perturbed.pvacur_.euler[2]}));
-    Mat3 c_nom = quat2dcm(euler2quat(Euler{nominal.pvacur_.euler[0], nominal.pvacur_.euler[1], nominal.pvacur_.euler[2]}));
-    Mat3 phi_cross = matMul(c_pert, transpose3(c_nom));
-    err(ErrorStateIndex21::kAtt + 0, 0) = phi_cross.m[2][1];
-    err(ErrorStateIndex21::kAtt + 1, 0) = phi_cross.m[0][2];
-    err(ErrorStateIndex21::kAtt + 2, 0) = phi_cross.m[1][0];
-
-    err(ErrorStateIndex21::kGyroBias + 0, 0) = perturbed.imuerror_.gyro_bias[0] - nominal.imuerror_.gyro_bias[0];
-    err(ErrorStateIndex21::kGyroBias + 1, 0) = perturbed.imuerror_.gyro_bias[1] - nominal.imuerror_.gyro_bias[1];
-    err(ErrorStateIndex21::kGyroBias + 2, 0) = perturbed.imuerror_.gyro_bias[2] - nominal.imuerror_.gyro_bias[2];
-
-    err(ErrorStateIndex21::kAccelBias + 0, 0) = perturbed.imuerror_.accel_bias[0] - nominal.imuerror_.accel_bias[0];
-    err(ErrorStateIndex21::kAccelBias + 1, 0) = perturbed.imuerror_.accel_bias[1] - nominal.imuerror_.accel_bias[1];
-    err(ErrorStateIndex21::kAccelBias + 2, 0) = perturbed.imuerror_.accel_bias[2] - nominal.imuerror_.accel_bias[2];
-
-    err(ErrorStateIndex21::kGyroScale + 0, 0) = perturbed.imuerror_.gyro_scale[0] - nominal.imuerror_.gyro_scale[0];
-    err(ErrorStateIndex21::kGyroScale + 1, 0) = perturbed.imuerror_.gyro_scale[1] - nominal.imuerror_.gyro_scale[1];
-    err(ErrorStateIndex21::kGyroScale + 2, 0) = perturbed.imuerror_.gyro_scale[2] - nominal.imuerror_.gyro_scale[2];
-
-    err(ErrorStateIndex21::kAccelScale + 0, 0) = perturbed.imuerror_.accel_scale[0] - nominal.imuerror_.accel_scale[0];
-    err(ErrorStateIndex21::kAccelScale + 1, 0) = perturbed.imuerror_.accel_scale[1] - nominal.imuerror_.accel_scale[1];
-    err(ErrorStateIndex21::kAccelScale + 2, 0) = perturbed.imuerror_.accel_scale[2] - nominal.imuerror_.accel_scale[2];
-    return err;
-}
 
 template <typename FilterType>
 class GnssInsFusionWorkflow {
 public:
-    GnssInsFusionWorkflow() : kf_(ErrorStateIndex21::kDim) {}
+    static FilterType createFilter(double ukf_alpha, double ukf_kappa, double ukf_beta) {
+        if constexpr (std::is_same<FilterType, UnscentedKalmanFilter>::value) {
+            return UnscentedKalmanFilter(ErrorStateIndex21::kDim, ukf_alpha, ukf_kappa, ukf_beta);
+        } else {
+            return FilterType(ErrorStateIndex21::kDim);
+        }
+    }
+
+    GnssInsFusionWorkflow(double ukf_alpha = 1.0, double ukf_kappa = 0.0, double ukf_beta = 2.0)
+        : kf_(createFilter(ukf_alpha, ukf_kappa, ukf_beta)) {}
         void initialize(const NavigationStatusData& nav_init,
                     const Matrix& x0,
                     const Matrix& p0) {
@@ -91,7 +60,7 @@ public:
         
         // C++17 'if constexpr' avoids SFINAE need for template method calls.
         if constexpr (std::is_same<FilterType, UnscentedKalmanFilter>::value) {
-            this->doPredict(q);
+            this->doPredict(f, q);
         } else {
             this->doPredict(f, q);
         }
@@ -110,14 +79,6 @@ public:
         std::cout << "\nGNSS RESIDUAL: " << residual_z(0,0) << " " << residual_z(1,0) << " " << residual_z(2,0) << std::endl; 
         gnssPositionUpdateAndFeedback21(kf_, residual_z, r, nav_state_, antenna_lever_arm_b, true);
         
-        nav_state_.pvapre_ = nav_state_.pvacur_;
-    }
-        void processImuOnly(const ImuMeasureData& imu_measure,
-                        const Matrix& f,
-                        const Matrix& q) {
-        ensureInitialized();
-        propagateIns(imu_measure, nav_state_);
-        doPredict(imu_measure, f, q);
         nav_state_.pvapre_ = nav_state_.pvacur_;
     }
         void processGnssUpdate(const GnssData& gnss_data,
@@ -156,8 +117,8 @@ public:
 
     template <typename T = FilterType>
     typename std::enable_if<std::is_same<T, UnscentedKalmanFilter>::value>::type
-    doPredict(const Matrix& q) {
-        kf_.predict(Matrix(), q);
+    doPredict(const Matrix& f, const Matrix& q) {
+        kf_.predict(f, q);
     }
 
 private:
@@ -182,13 +143,6 @@ private:
         z(1, 0) = -dr_gnss_minus_ins_n.y;
         z(2, 0) = -dr_gnss_minus_ins_n.z;
         return z;
-    }
-        static Vec3 estimateOmegaIbBFromImu(const ImuMeasureData& imu_measure,
-                                        const NavigationStatusData& nav_state) {
-        const double dt = imu_measure.imucur_.time - imu_measure.imupre_.time;
-        const double dt_safe = (dt > 1e-6) ? dt : 1e-6;
-        const ImuData imu_corr = compensateSingleImuByError(imu_measure.imucur_, nav_state.imuerror_, dt_safe);
-        return Vec3{imu_corr.dtheta_x / dt_safe, imu_corr.dtheta_y / dt_safe, imu_corr.dtheta_z / dt_safe};
     }
         void ensureInitialized() const {
         if (!initialized_) {

@@ -10,14 +10,6 @@ struct InsCompensatedIncrement {
 	Vec3 zeta_n;
 	double dt = 0.0;
 };
-struct AttitudeUpdateResult {
-	Quaternion q_nb_cur;
-	Blh blh_half;
-	Vec3 omega_in_n_half;
-};
-inline Quaternion quatInverseUnit(const Quaternion& q) {
-	return Quaternion{q.w, -q.x, -q.y, -q.z};
-}
 inline Vec3 addVec3(const Vec3& a, const Vec3& b) {
 	return Vec3{a.x + b.x, a.y + b.y, a.z + b.z};
 }
@@ -122,22 +114,6 @@ inline void eulerToPvaEuler(const Euler& e, PvaData& pva) {
 	pva.euler[0] = e.roll;
 	pva.euler[1] = e.pitch;
 	pva.euler[2] = e.yaw;
-}
-inline Blh estimateMidpointBlh(const Blh& blh_pre,
-							   const Vec3& vel_ref_n,
-							   double dt) {
-	const LocalPosition pos_pre{blh_pre.lat, blh_pre.lon, blh_pre.h};
-	const LocalVelocity vel_ref_local{vel_ref_n.x, vel_ref_n.y, vel_ref_n.z};
-	const EarthParameters earth_pre = updateEarthParameters(pos_pre, vel_ref_local);
-	const double h_half = blh_pre.h - 0.5 * dt * vel_ref_n.z;
-	const double lat_half = blh_pre.lat + 0.5 * dt * vel_ref_n.x / (earth_pre.rm + h_half);
-	const double cos_lat_half = std::cos(lat_half);
-	const double safe_cos_lat_half = (std::fabs(cos_lat_half) < 1e-8)
-							  ? ((cos_lat_half >= 0.0) ? 1e-8 : -1e-8)
-							  : cos_lat_half;
-	const double lon_half = blh_pre.lon +
-		0.5 * dt * vel_ref_n.y / ((earth_pre.rn + h_half) * safe_cos_lat_half);
-	return Blh{lat_half, lon_half, h_half};
 }
 inline InsCompensatedIncrement compensateImuConingSculling(
 		const ImuData& imu_pre,

@@ -1,0 +1,73 @@
+# =============================================================================
+# GNSS-INS 组合导航配置文件
+# 修改此文件即可调整参数，无需重新编译代码
+# 格式: key: value  (YAML风格)
+# =============================================================================
+
+# --- 滤波算法: EKF / UKF / GO ---
+algorithm: EKF
+
+# --- UKF 参数 (仅 UKF 算法时生效) ---
+ukf_alpha: 1.0
+ukf_kappa: 0.0
+ukf_beta: 2.0
+
+# --- 文件路径 ---
+imu_file: data_ICM20602/ICM20602.txt
+gnss_file: data_ICM20602/GNSS_RTK.txt
+output_dir: data_ICM20602
+
+# --- 时间窗口 (秒) ---
+process_start_s: 357599
+process_end_s: -1.0
+gnss_sync_tolerance: 0.001
+
+# --- IMU 噪声相关时间 (秒) ---
+corrtime_gb: 3600.0
+corrtime_ab: 3600.0
+corrtime_gs: 3600.0
+corrtime_as: 3600.0
+
+# --- 天线杆臂 (b系, 米) ---
+antlever: [-0.073, 0.302, 0.087]
+
+# --- 初始位置 (度, 度, 米) ---
+init_blh: [30.4653881320, 114.4694083874, 23.821]
+init_blh_in_degree: true
+use_first_gnss_position: false
+
+# --- 初始速度 NED (m/s) ---
+init_vel: [-0.04006, 10.91736, 0.05754]
+
+# --- 初始姿态 (度) ---
+init_euler: [0.55606, -0.79210, 91.21104]
+init_euler_in_degree: true
+
+# --- IMU 随机游走 ---
+gyro_arw_degpsqrth: [0.2, 0.2, 0.2]
+accel_vrw_mpspsqrth: [0.2, 0.2, 0.2]
+
+# --- 初始零偏与比例因子 ---
+init_gyro_bias_degph: [-1372.74702497, -477.57869162, 665.15948298]
+init_accel_bias_mgal: [-3700.05593095, -12971.62640788, 2409.12090896]
+init_gyro_scale_ppm: [325.28151451, -145.75970550, -395.30905879]
+init_accel_scale_ppm: [1651.17392773, 614.16423055, 788.58869356]
+
+# --- 初始标准差 P0 ---
+pos_std: [0.008, 0.010, 0.035]
+vel_std: [0.01, 0.01, 0.01]
+att_std_deg: [0.01, 0.01, 0.01]
+gyro_bias_std_degph: [5, 5, 5]
+accel_bias_std_mgal: [20, 20, 20]
+gyro_scale_std_ppm: [50, 50, 50]
+accel_scale_std_ppm: [50, 50, 50]
+
+# --- 过程噪声标准差 ---
+gyro_bias_process_std_degph: [200.0, 200.0, 200.0]
+accel_bias_process_std_mgal: [1000.0, 1000.0, 200.0]
+gyro_scale_process_std_ppm: [1000.0, 1000.0, 1000.0]
+accel_scale_process_std_ppm: [1000.0, 1000.0, 1000.0]
+
+# --- 进度条 ---
+progress_bar_width: 40
+progress_update_step: 50000

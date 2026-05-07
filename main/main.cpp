@@ -14,6 +14,7 @@
 #include "fusion_workflow.h"
 #include "is_update.h"
 #include "config.h"
+#include "config_parser.h"
 namespace ins {
 // 归一化GNSS经纬度为弧度单位
 inline void normalizeGnssAngleToRadIfNeeded(GnssData& gnss) {
@@ -124,7 +125,8 @@ inline Matrix buildAlignedTransitionF(double dt,
 								double t_gb,
 								double t_ab,
 								double t_gs,
-								double t_as) {
+								double t_as,
+									const Mat3* c_nb_override = nullptr) {
 	const double dt_safe = (dt > 1e-6) ? dt : 1e-6;
 	const double tgb_safe = (t_gb > 1e-6) ? t_gb : 1e-6;
 	const double tab_safe = (t_ab > 1e-6) ? t_ab : 1e-6;
@@ -154,7 +156,7 @@ inline Matrix buildAlignedTransitionF(double dt,
 								  : cos_lat;
 	const Euler e{pva.euler[0], pva.euler[1], pva.euler[2]};
 	const Quaternion q_nb = euler2quat(e);
-	const Matrix c_nb = mat3ToMatrix(quat2dcm(q_nb));
+	const Matrix c_nb = c_nb_override ? mat3ToMatrix(*c_nb_override) : mat3ToMatrix(quat2dcm(q_nb));
 	const ImuData imu_corr = compensateSingleImuByError(imu_measure.imucur_, nav_state.imuerror_, dt_safe);
 	const Vec3 f_b{imu_corr.dvel_x / dt_safe, imu_corr.dvel_y / dt_safe, imu_corr.dvel_z / dt_safe};
 	const Vec3 omega_ib_b{imu_corr.dtheta_x / dt_safe, imu_corr.dtheta_y / dt_safe, imu_corr.dtheta_z / dt_safe};
@@ -492,50 +494,44 @@ inline int RunGnssInsMain(const MainProgramConfig& cfg = MainProgramConfig()) {
 		if (cfg.process_end_s >= 0.0 && imu_cur.time > cfg.process_end_s) {
 			break;
 		}
-		auto runProcessStep = [&](const ImuMeasureData& step_imu,
-								bool has_gnss_step,
-								const GnssData& gnss_step) {
-			double step_dt = step_imu.imucur_.time - step_imu.imupre_.time;
-			if (step_dt < 1e-6) {
-				step_dt = 1e-6;
-			}
-                        // 1. 获取k-1时刻的状态
-			const NavigationStatusData nav_km1 = workflow.navState();
-                        // 2. 使用k-1时刻状态构建雅可比矩阵 F
-			const Matrix f = buildAlignedTransitionF(
-				step_dt,
-				nav_km1,  // k-1
-				step_imu,
-				cfg.corrtime_gb,
-				cfg.corrtime_ab,
-				cfg.corrtime_gs,
-				cfg.corrtime_as);
-                        // 3. 准备进行INS传播
-			NavigationStatusData nav_after_mech = nav_km1;
-			nav_after_mech.pvapre_ = nav_km1.pvacur_; // propagateInspvapre_k-1
-                        // 4. 执行INS机械编排
-			propagateIns(step_imu, nav_after_mech);
-			//  nav_after_mech.pvapre_  k-1, nav_after_mech.pvacur_  k
-                        // 5. 构建过程噪声协方差矩阵 Q
-			// nav_after_mech.pvapre_  k-1, nav_after_mech.pvacur_  k
-			const Matrix q = buildAlignedProcessNoiseQ(
-								step_dt,
-								f,
-								nav_after_mech,  // k-1k
-				cfg.init,
-				cfg.corrtime_gb,
-				cfg.corrtime_ab,
-				cfg.corrtime_gs,
-				cfg.corrtime_as);
-                        // 6. 更新状态，执行 EKF 
-			workflow.setNavState(nav_after_mech);
-			workflow.processStep(
-				f,
-				q,
-				has_gnss_step,
-				gnss_step,
-				cfg.antenna_lever_arm_b);
-		};
+					auto runProcessStep = [&](const ImuMeasureData& step_imu,
+							bool has_gnss_step,
+							const GnssData& gnss_step) {
+				double step_dt = step_imu.imucur_.time - step_imu.imupre_.time;
+				if (step_dt < 1e-6) {
+					step_dt = 1e-6;
+				}
+				const NavigationStatusData nav_km1 = workflow.navState();
+				NavigationStatusData nav_after_mech = nav_km1;
+				nav_after_mech.pvapre_ = nav_km1.pvacur_;
+				propagateIns(step_imu, nav_after_mech);
+				const Mat3 c_nb_k = quat2dcm(euler2quat(pvaEulerToEuler(nav_after_mech.pvacur_)));
+				const Matrix f = buildAlignedTransitionF(
+					step_dt,
+					nav_after_mech,
+					step_imu,
+					cfg.corrtime_gb,
+					cfg.corrtime_ab,
+					cfg.corrtime_gs,
+					cfg.corrtime_as,
+					&c_nb_k);
+				const Matrix q = buildAlignedProcessNoiseQ(
+					step_dt,
+					f,
+					nav_after_mech,
+					cfg.init,
+					cfg.corrtime_gb,
+					cfg.corrtime_ab,
+					cfg.corrtime_gs,
+					cfg.corrtime_as);
+				workflow.setNavState(nav_after_mech);
+				workflow.processStep(
+					f,
+					q,
+					has_gnss_step,
+					gnss_step,
+					cfg.antenna_lever_arm_b);
+			};
 		GnssData gnss_use;
 		bool has_gnss_for_step = false;
 		while (has_next_gnss && gnss_next.time <= imu_cur.time + cfg.gnss_sync_tolerance) {
@@ -652,13 +648,13 @@ std::cout << "\nGNSS Time: " << gnss_use.time << " IMU cur: " << imu_cur.time <<
 };
 
 if (cfg.algorithm == FilterAlgorithm::ExtendedKalman) {
-    GnssInsFusionWorkflow<ExtendedKalmanFilter> wf;
+    GnssInsFusionWorkflow<ExtendedKalmanFilter> wf(cfg.ukf_alpha, cfg.ukf_kappa, cfg.ukf_beta);
     runProcessWorkflow(wf);
 } else if (cfg.algorithm == FilterAlgorithm::UnscentedKalman) {
-    GnssInsFusionWorkflow<UnscentedKalmanFilter> wf;
+    GnssInsFusionWorkflow<UnscentedKalmanFilter> wf(cfg.ukf_alpha, cfg.ukf_kappa, cfg.ukf_beta);
     runProcessWorkflow(wf);
 } else if (cfg.algorithm == FilterAlgorithm::GraphOptimization) {
-    GnssInsFusionWorkflow<GraphOptimization> wf;
+    GnssInsFusionWorkflow<GraphOptimization> wf(cfg.ukf_alpha, cfg.ukf_kappa, cfg.ukf_beta);
     runProcessWorkflow(wf);
 }
 
@@ -667,16 +663,75 @@ return 0;
 // 打印命令行参数使用说明
 inline void printMainUsage(const char* exe_name) {
 	std::cout << "Usage: " << exe_name
+			  << " [config.yaml] [--algorithm EKF|UKF|GO]"
 			  << " [--imu <imu_file>] [--gnss <gnss_file>] [--out <output_dir>]"
+			  << "\n  "
 			  << " [--sync <seconds>]"
 			  << " [--corrtime-gb <seconds>] [--corrtime-ab <seconds>]"
 			  << " [--corrtime-gs <seconds>] [--corrtime-as <seconds>]"
-			  << " [--start <imu_time>] [--end <imu_time|-1>] [--help]"
+			  << "\n  "
+			  << " [--start <imu_time>] [--end <imu_time|-1>] [--config <yaml_path>] [--help]"
 			  << std::endl;
 }
-// 从命令行参数解析生成程序的配置信息
-inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
+// 从 YAML 配置文件加载全部运行参数
+inline MainProgramConfig LoadMainConfigFromYaml(const std::string& yaml_path) {
+	ConfigParser p;
+	p.load(yaml_path);
 	MainProgramConfig cfg;
+
+	std::string algo = p.str("algorithm", "EKF");
+	if (algo == "UKF") cfg.algorithm = FilterAlgorithm::UnscentedKalman;
+	else if (algo == "GO") cfg.algorithm = FilterAlgorithm::GraphOptimization;
+	else cfg.algorithm = FilterAlgorithm::ExtendedKalman;
+
+	cfg.imu_file_path        = p.str("imu_file", "");
+	cfg.gnss_file_path       = p.str("gnss_file", "");
+	cfg.output_dir           = p.str("output_dir", ".");
+	cfg.process_start_s      = p.num("process_start_s", -1.0);
+	cfg.process_end_s        = p.num("process_end_s", -1.0);
+	cfg.gnss_sync_tolerance  = p.num("gnss_sync_tolerance", 0.001);
+	cfg.corrtime_gb          = p.num("corrtime_gb", 3600.0);
+	cfg.corrtime_ab          = p.num("corrtime_ab", 3600.0);
+	cfg.corrtime_gs          = p.num("corrtime_gs", 3600.0);
+	cfg.corrtime_as          = p.num("corrtime_as", 3600.0);
+	cfg.antenna_lever_arm_b  = p.arr3("antlever", {0.0, 0.0, 0.0});
+	cfg.progress_bar_width   = static_cast<std::size_t>(p.integer("progress_bar_width", 40));
+	cfg.progress_update_step = static_cast<std::size_t>(p.integer("progress_update_step", 50000));
+	cfg.ukf_alpha            = p.num("ukf_alpha", 1.0);
+	cfg.ukf_kappa            = p.num("ukf_kappa", 0.0);
+	cfg.ukf_beta             = p.num("ukf_beta", 2.0);
+
+	auto& init = cfg.init;
+	init.use_first_gnss_position = p.flag("use_first_gnss_position", false);
+	init.init_blh           = p.arr3("init_blh", {0.0, 0.0, 0.0});
+	init.init_blh_in_degree = p.flag("init_blh_in_degree", true);
+	init.init_vel_n         = p.arr3("init_vel", {0.0, 0.0, 0.0});
+	init.init_euler         = p.arr3("init_euler", {0.0, 0.0, 0.0});
+	init.init_euler_in_degree = p.flag("init_euler_in_degree", true);
+	init.init_imu_error.gyro_random_walk  = p.arr3("gyro_arw_degpsqrth", {0.2, 0.2, 0.2});
+	init.init_imu_error.accel_random_walk = p.arr3("accel_vrw_mpspsqrth", {0.2, 0.2, 0.2});
+	init.init_gyro_bias     = p.arr3("init_gyro_bias_degph", {0.0, 0.0, 0.0});
+	init.init_accel_bias    = p.arr3("init_accel_bias_mgal", {0.0, 0.0, 0.0});
+	init.init_gyro_scale    = p.arr3("init_gyro_scale_ppm", {0.0, 0.0, 0.0});
+	init.init_accel_scale   = p.arr3("init_accel_scale_ppm", {0.0, 0.0, 0.0});
+	init.pos_std            = p.arr3("pos_std", {1.0, 1.0, 1.0});
+	init.vel_std            = p.arr3("vel_std", {0.1, 0.1, 0.1});
+	init.att_std            = p.arr3("att_std_deg", {0.1, 0.1, 0.1});
+	init.gyro_bias_std      = p.arr3("gyro_bias_std_degph", {10.0, 10.0, 10.0});
+	init.accel_bias_std     = p.arr3("accel_bias_std_mgal", {50.0, 50.0, 50.0});
+	init.gyro_scale_std     = p.arr3("gyro_scale_std_ppm", {100.0, 100.0, 100.0});
+	init.accel_scale_std    = p.arr3("accel_scale_std_ppm", {100.0, 100.0, 100.0});
+	init.gyro_bias_process_std  = p.arr3("gyro_bias_process_std_degph", {100.0, 100.0, 100.0});
+	init.accel_bias_process_std = p.arr3("accel_bias_process_std_mgal", {500.0, 500.0, 500.0});
+	init.gyro_scale_process_std = p.arr3("gyro_scale_process_std_ppm", {500.0, 500.0, 500.0});
+	init.accel_scale_process_std = p.arr3("accel_scale_process_std_ppm", {500.0, 500.0, 500.0});
+
+	return cfg;
+}
+
+// 从命令行参数解析生成程序的配置信息 (在已有配置基础上叠加覆盖)
+inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv, const MainProgramConfig& base_cfg = MainProgramConfig()) {
+	MainProgramConfig cfg = base_cfg;
 	for (int i = 1; i < argc; ++i) {
 		const std::string arg = argv[i];
 		if (arg == "--help" || arg == "-h") {
@@ -716,6 +771,15 @@ inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 			cfg.process_start_s = std::stod(needValue("--start"));
 		} else if (arg == "--end") {
 			cfg.process_end_s = std::stod(needValue("--end"));
+		} else if (arg == "--config") {
+			needValue("--config"); // consumed but handled before this call
+		} else if (arg == "--algorithm") {
+			std::string v = needValue("--algorithm");
+			if (v == "UKF") cfg.algorithm = FilterAlgorithm::UnscentedKalman;
+			else if (v == "GO") cfg.algorithm = FilterAlgorithm::GraphOptimization;
+			else cfg.algorithm = FilterAlgorithm::ExtendedKalman;
+		} else if (arg[0] != '-') {
+			// positional argument (config file path), already handled — skip
 		} else {
 			throw std::runtime_error("Unknown argument: " + arg);
 		}
@@ -727,12 +791,43 @@ inline MainProgramConfig ParseMainConfigFromArgs(int argc, char** argv) {
 // 程序的入口点：负责解析命令行参数、加载相关配置文件，并启动核心的GNSS/INS组合导航算法求解框架
 int main(int argc, char** argv) {
 	try {
-		const ins::MainProgramConfig cfg = ins::ParseMainConfigFromArgs(argc, argv);
+		// Quick scan for --help
+		for (int i = 1; i < argc; ++i) {
+			std::string arg = argv[i];
+			if (arg == "--help" || arg == "-h") {
+				ins::printMainUsage((argc > 0 && argv[0] != nullptr) ? argv[0] : "program");
+				return 0;
+			}
+		}
+
+		// Find --config path, or use the first positional argument as config file
+		std::string config_path = "gnss_ins.yaml";
+		for (int i = 1; i < argc; ++i) {
+			if (std::string(argv[i]) == "--config" && i + 1 < argc) {
+				config_path = argv[i + 1];
+				break;
+			}
+			// First positional arg (not starting with -) = config file (like KF-GINS)
+			if (argv[i][0] != '-') {
+				config_path = argv[i];
+				break;
+			}
+		}
+
+		// Load from YAML, fall back to built-in defaults if file missing
+		ins::MainProgramConfig cfg;
+		{
+			std::ifstream test(config_path);
+			if (test.good()) {
+				test.close();
+				cfg = ins::LoadMainConfigFromYaml(config_path);
+			}
+		}
+
+		// Apply CLI overrides on top
+		cfg = ins::ParseMainConfigFromArgs(argc, argv, cfg);
 		return ins::RunGnssInsMain(cfg);
 	} catch (const std::exception& e) {
-		if (std::strcmp(e.what(), "help requested") == 0) {
-			return 0;
-		}
 		std::cerr << "Configuration parsing failed: " << e.what() << std::endl;
 		ins::printMainUsage((argc > 0 && argv[0] != nullptr) ? argv[0] : "program");
 		return 1;

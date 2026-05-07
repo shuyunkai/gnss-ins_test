@@ -15,11 +15,11 @@ public:
 
     // (1) 步骤1：初始化
     // 设定初始状态 x_0 与协方差 P_0
-    explicit UnscentedKalmanFilter(std::size_t state_dim, double alpha = 1e-3, double kappa = 0.0, double beta = 2.0) {
+    explicit UnscentedKalmanFilter(std::size_t state_dim, double alpha = 1.0, double kappa = 0.0, double beta = 2.0) {
         resize(state_dim, alpha, kappa, beta);
     }
 
-    void resize(std::size_t state_dim, double alpha = 1e-3, double kappa = 0.0, double beta = 2.0) {
+    void resize(std::size_t state_dim, double alpha = 1.0, double kappa = 0.0, double beta = 2.0) {
         state_dim_ = state_dim;
         alpha_ = alpha;
         kappa_ = kappa;
@@ -59,7 +59,6 @@ public:
     const Matrix& state() const { return x_; }
     const Matrix& covariance() const { return p_; }
     std::size_t stateDim() const { return state_dim_; }
-    const Matrix& kalmanGain() const { return k_; }
 
     // 辅助函数: Cholesky 分解
     static Matrix cholesky(const Matrix& a) {
@@ -155,11 +154,6 @@ public:
         predict(linear_f, q);
     }
 
-    void predict(const Matrix& f, const Matrix& q, const Matrix& gamma) {
-        if (!initialized_) throw std::runtime_error("UKF not initialized");
-        const Matrix q_mapped = mul(mul(gamma, q), transpose(gamma));
-        predict(f, q_mapped);
-    }
 
     // (3) 步骤3：更新阶段 (Measurement Update)
     // UKF量测更新步：将预测后的Sigma点映射到实际观测空间，加权求和得出预估观测值，并利用互协方差计算卡尔曼增益系数进而获取后验更新状态
@@ -242,14 +236,6 @@ public:
         update(z_residual, linear_h, r);
     }
 
-    void applyCovarianceResetJacobian(const Matrix& j) {
-        if (!initialized_) throw std::runtime_error("UKF not initialized");
-        if (j.rows() != state_dim_ || j.cols() != state_dim_) {
-            throw std::invalid_argument("UKF apply: dims mismatch");
-        }
-        p_ = symmetrizeMatrix(mul(mul(j, p_), transpose(j)));
-        if (!isCovarianceValid()) regularizeCovariance();
-    }
 
     void zeroStateSubrange(std::size_t start_row, std::size_t count) {
         if (!initialized_) throw std::runtime_error("UKF not initialized");
@@ -283,7 +269,7 @@ public:
 private:
     std::size_t state_dim_ = 0;
     bool initialized_ = false;
-    double alpha_ = 1e-3;
+    double alpha_ = 1.0;
     double kappa_ = 0.0;
     double beta_ = 2.0;
     double lambda_ = 0.0;
@@ -307,6 +293,11 @@ inline void gnssPositionUpdateAndFeedback21(
         bool reset_state_after_feedback = true) {
     if (kf.stateDim() != ErrorStateIndex21::kDim) {
         throw std::invalid_argument("UKF: KF must be 21-dim");
+    }
+    // UKF诊断输出：确认非线性量测更新被调用
+    static int ukf_call_count = 0;
+    if (++ukf_call_count <= 5) {
+        std::cout << "[UKF] nonlinear update call #" << ukf_call_count << std::endl;
     }
     // 纯非线性观测方程 h(\chi_i)：计算真实误差状态 \chi_i 下预期产生的测距残差
     auto h_func = [&](const Matrix& chi_i) {
